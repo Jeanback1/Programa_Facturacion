@@ -96,7 +96,7 @@ class HomeView(ctk.CTkFrame):
             ctk.CTkButton(
                 botones_frame,
                 text="Gestión",
-                command=lambda: print("Navegar a: Gestión"),
+                command=lambda: self._navigate("gestion"),
                 **btn_kwargs,
             ).grid(row=0, column=2, padx=18, pady=10)
 

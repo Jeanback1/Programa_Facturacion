@@ -5,6 +5,9 @@ from collections.abc import Callable
 
 import customtkinter as ctk
 
+from app.models.producto import Producto
+from app.repositories import producto_repo
+
 
 class FacturarView(ctk.CTkFrame):
     """Frame de facturación con catálogo de productos y lista de la factura actual."""
@@ -18,7 +21,15 @@ class FacturarView(ctk.CTkFrame):
         master.minsize(800, 500)
         master.resizable(True, True)
 
+        # Estado de la factura actual: {product_id: {nombre, precio_unitario, cantidad, label}}
+        self._items: dict[int, dict] = {}
+        self._total: float = 0.0
+
+        # Productos cargados desde la BD (se usan para filtrar en búsqueda)
+        self._todos_productos: list[Producto] = producto_repo.listar_todos()
+
         self._construir_ui()
+        self._renderizar_catalogo(self._todos_productos)
 
     def _construir_ui(self) -> None:
         """Construye todos los widgets de la pantalla de facturación."""
@@ -28,7 +39,6 @@ class FacturarView(ctk.CTkFrame):
         header.pack(fill="x", side="top")
         header.pack_propagate(False)
 
-        # Botón para regresar a la pantalla principal
         ctk.CTkButton(
             header,
             text="←",
@@ -51,14 +61,12 @@ class FacturarView(ctk.CTkFrame):
             font=ctk.CTkFont(size=14),
         )
         self._campo_busqueda.pack(fill="x", expand=True)
-        # Llamar a buscar_producto() cada vez que el usuario escribe
-        self._campo_busqueda.bind("<KeyRelease>", lambda _event: self.buscar_producto())
+        self._campo_busqueda.bind("<KeyRelease>", lambda _event: self._buscar_producto())
 
         # ── Área de dos columnas ────────────────────────────────────
         area_columnas = ctk.CTkFrame(self, fg_color="transparent")
         area_columnas.pack(fill="both", expand=True, padx=16, pady=(0, 16))
 
-        # Proporción 70 % izquierda / 30 % derecha
         area_columnas.grid_columnconfigure(0, weight=7)
         area_columnas.grid_columnconfigure(1, weight=3)
         area_columnas.grid_rowconfigure(0, weight=1)
@@ -69,7 +77,6 @@ class FacturarView(ctk.CTkFrame):
         col_izquierda.grid_rowconfigure(0, weight=1)
         col_izquierda.grid_columnconfigure(0, weight=1)
 
-        # Frame desplazable donde se renderizarán las tarjetas del catálogo
         self._frame_catalogo = ctk.CTkScrollableFrame(
             col_izquierda,
             label_text="Catálogo",
@@ -77,21 +84,12 @@ class FacturarView(ctk.CTkFrame):
         )
         self._frame_catalogo.grid(row=0, column=0, sticky="nsew")
 
-        # Placeholder hasta que se carguen los productos desde la BD
-        ctk.CTkLabel(
-            self._frame_catalogo,
-            text="Los productos aparecerán aquí",
-            text_color="gray",
-            font=ctk.CTkFont(size=13),
-        ).pack(pady=24)
-
         # ── Columna derecha — Lista de la factura ───────────────────
         col_derecha = ctk.CTkFrame(area_columnas)
         col_derecha.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         col_derecha.grid_rowconfigure(0, weight=1)
         col_derecha.grid_columnconfigure(0, weight=1)
 
-        # Frame desplazable con los productos ya agregados a la factura
         self._frame_factura = ctk.CTkScrollableFrame(
             col_derecha,
             label_text="Factura actual",
@@ -99,21 +97,39 @@ class FacturarView(ctk.CTkFrame):
         )
         self._frame_factura.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8, 4))
 
-        # Placeholder hasta que el usuario agregue productos
-        ctk.CTkLabel(
+        # Placeholder visible cuando la factura está vacía
+        self._placeholder_factura = ctk.CTkLabel(
             self._frame_factura,
-            text="Lista de productos agregados",
+            text="Sin productos aún",
             text_color="gray",
             font=ctk.CTkFont(size=13),
-        ).pack(pady=24)
+        )
+        self._placeholder_factura.pack(pady=24)
 
-        # ── Botones inferiores (fuera del scroll) ───────────────────
+        # ── Total ───────────────────────────────────────────────────
+        frame_total = ctk.CTkFrame(col_derecha, fg_color="transparent")
+        frame_total.grid(row=1, column=0, sticky="ew", padx=8, pady=(2, 2))
+
+        ctk.CTkLabel(
+            frame_total,
+            text="Total:",
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(side="left", padx=12)
+
+        self._label_total = ctk.CTkLabel(
+            frame_total,
+            text="$0",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#2ECC71",
+        )
+        self._label_total.pack(side="right", padx=12)
+
+        # ── Botones inferiores ──────────────────────────────────────
         frame_botones = ctk.CTkFrame(col_derecha, fg_color="transparent")
-        frame_botones.grid(row=1, column=0, sticky="ew", padx=8, pady=(4, 10))
+        frame_botones.grid(row=2, column=0, sticky="ew", padx=8, pady=(0, 10))
         frame_botones.grid_columnconfigure(0, weight=1)
         frame_botones.grid_columnconfigure(1, weight=1)
 
-        # Botón para imprimir la factura actual
         ctk.CTkButton(
             frame_botones,
             text="Imprimir",
@@ -121,33 +137,134 @@ class FacturarView(ctk.CTkFrame):
             command=self.imprimir_factura,
         ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
 
-        # Botón para eliminar el producto seleccionado de la factura
         ctk.CTkButton(
             frame_botones,
             text="Eliminar",
             font=ctk.CTkFont(size=13, weight="bold"),
             fg_color="#C0392B",
             hover_color="#922B21",
-            command=self.eliminar_producto,
+            command=self._limpiar_factura,
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
 
-    # ── Acciones (placeholders — lógica de BD en siguiente fase) ───────────────
+    # ── Catálogo ────────────────────────────────────────────────────────────────
 
-    def buscar_producto(self) -> None:
+    def _renderizar_catalogo(self, productos: list[Producto]) -> None:
+        """Limpia el catálogo y lo re-renderiza con la lista de productos dada."""
+        for widget in self._frame_catalogo.winfo_children():
+            widget.destroy()
+
+        if not productos:
+            ctk.CTkLabel(
+                self._frame_catalogo,
+                text="No se encontraron productos",
+                text_color="gray",
+                font=ctk.CTkFont(size=13),
+            ).pack(pady=24)
+            return
+
+        for producto in productos:
+            self._crear_tarjeta_producto(producto)
+
+    def _crear_tarjeta_producto(self, producto: Producto) -> None:
+        """Crea una tarjeta de producto en el catálogo."""
+        tarjeta = ctk.CTkFrame(self._frame_catalogo)
+        tarjeta.pack(fill="x", padx=4, pady=3)
+        tarjeta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=producto.nombre,
+            anchor="w",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=0, column=0, sticky="w", padx=12, pady=(8, 0))
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"${producto.precio:,.0f}",
+            anchor="w",
+            text_color="gray",
+            font=ctk.CTkFont(size=12),
+        ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 8))
+
+        ctk.CTkButton(
+            tarjeta,
+            text="Agregar",
+            width=90,
+            height=32,
+            font=ctk.CTkFont(size=12),
+            command=lambda p=producto: self._agregar_a_factura(p),
+        ).grid(row=0, column=1, rowspan=2, padx=12, pady=8)
+
+    def _buscar_producto(self) -> None:
         """Filtra el catálogo según el texto ingresado en la barra de búsqueda."""
-        print("buscar_producto()")
+        termino = self._campo_busqueda.get().strip().lower()
+        if termino:
+            filtrados = [p for p in self._todos_productos if termino in p.nombre.lower()]
+        else:
+            filtrados = self._todos_productos
+        self._renderizar_catalogo(filtrados)
 
-    def agregar_producto(self) -> None:
-        """Agrega el producto seleccionado a la lista de la factura actual."""
-        print("agregar_producto()")
+    # ── Factura ─────────────────────────────────────────────────────────────────
+
+    def _agregar_a_factura(self, producto: Producto) -> None:
+        """Agrega el producto a la factura o incrementa su cantidad si ya existe."""
+        pid = producto.id
+
+        if pid in self._items:
+            self._items[pid]["cantidad"] += 1
+            self._items[pid]["label"].configure(
+                text=self._texto_item(self._items[pid])
+            )
+        else:
+            # Ocultar el placeholder al agregar el primer ítem
+            if not self._items:
+                self._placeholder_factura.pack_forget()
+
+            label = ctk.CTkLabel(
+                self._frame_factura,
+                text=self._texto_item({"nombre": producto.nombre, "precio_unitario": producto.precio, "cantidad": 1}),
+                anchor="w",
+                font=ctk.CTkFont(size=13),
+            )
+            label.pack(fill="x", padx=8, pady=2)
+
+            self._items[pid] = {
+                "nombre": producto.nombre,
+                "precio_unitario": producto.precio,
+                "cantidad": 1,
+                "label": label,
+            }
+
+        self._total += producto.precio
+        self._label_total.configure(text=f"${self._total:,.0f}")
+
+    def _limpiar_factura(self) -> None:
+        """Elimina todos los productos de la factura y resetea el total."""
+        for widget in self._frame_factura.winfo_children():
+            widget.destroy()
+
+        self._items.clear()
+        self._total = 0.0
+        self._label_total.configure(text="$0")
+
+        # Restaurar el placeholder
+        self._placeholder_factura = ctk.CTkLabel(
+            self._frame_factura,
+            text="Sin productos aún",
+            text_color="gray",
+            font=ctk.CTkFont(size=13),
+        )
+        self._placeholder_factura.pack(pady=24)
+
+    @staticmethod
+    def _texto_item(item: dict) -> str:
+        """Formatea una línea de la factura: cantidad - nombre - precio_total."""
+        total = item["precio_unitario"] * item["cantidad"]
+        return f"{item['cantidad']} - {item['nombre']} - ${total:,.0f}"
 
     def imprimir_factura(self) -> None:
-        """Envía la factura actual a impresión."""
+        """Envía la factura actual a impresión (placeholder)."""
         print("imprimir_factura()")
-
-    def eliminar_producto(self) -> None:
-        """Elimina el producto seleccionado de la lista de la factura."""
-        print("eliminar_producto()")
 
     def _volver_a_home(self) -> None:
         """Regresa a la pantalla principal."""

@@ -15,6 +15,7 @@ def run_migrations() -> None:
     conn = get_connection()
     try:
         _crear_tabla_usuarios(conn)
+        _crear_tabla_productos(conn)
         _insertar_admin_inicial(conn)
         conn.commit()
     except Exception as e:
@@ -35,6 +36,17 @@ def _crear_tabla_usuarios(conn) -> None:
             rol          TEXT     NOT NULL CHECK(rol IN ('admin', 'cajera')),
             activo       INTEGER  DEFAULT 1,
             creado_en    DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
+def _crear_tabla_productos(conn) -> None:
+    """Crea la tabla de productos si no existe."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS productos (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre  TEXT    NOT NULL,
+            precio  REAL    NOT NULL CHECK(precio >= 0)
         )
     """)
 

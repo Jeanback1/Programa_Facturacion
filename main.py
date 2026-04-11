@@ -34,6 +34,9 @@ class App(ctk.CTk):
         elif destino == "facturar":
             from app.views.facturar_view import FacturarView
             self._frame_actual = FacturarView(self, navigate=self.navigate)
+        elif destino == "gestion":
+            from app.views.gestion_view import GestionView
+            self._frame_actual = GestionView(self, navigate=self.navigate)
         else:
             raise ValueError(f"Destino desconocido: {destino!r}")
 
