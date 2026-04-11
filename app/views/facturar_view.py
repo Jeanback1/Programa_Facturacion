@@ -271,9 +271,11 @@ class FacturarView(ctk.CTkFrame):
                 self._frame_factura,
                 text=self._texto_item({"nombre": producto.nombre, "precio_unitario": producto.precio, "cantidad": 1}),
                 anchor="w",
-                font=ctk.CTkFont(size=13),
+                font=ctk.CTkFont(size=16),
+                height=40,
+                width=self._frame_factura.winfo_width() - 20
             )
-            label.pack(fill="x", padx=8, pady=2)
+            label.pack(fill="x", padx=8, pady=6)
 
             self._items[pid] = {
                 "nombre": producto.nombre,
