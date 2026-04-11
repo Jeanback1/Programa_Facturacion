@@ -259,23 +259,57 @@ class FacturarView(ctk.CTkFrame):
 
         if pid in self._items:
             self._items[pid]["cantidad"] += 1
-            self._items[pid]["label"].configure(
-                text=self._texto_item(self._items[pid])
-            )
+            item = self._items[pid]
+            # Actualizar cantidad
+            item["label"].children["!ctklabel"].configure(text=f"{item['cantidad']}")
+            # Actualizar precio total
+            total = item["precio_unitario"] * item["cantidad"]
+            item["label"].children["!ctklabel2"].configure(text=f"${total:,.0f}")
         else:
             # Ocultar el placeholder al agregar el primer ítem
             if not self._items:
                 self._placeholder_factura.pack_forget()
 
-            label = ctk.CTkLabel(
+            item_frame = ctk.CTkFrame(
                 self._frame_factura,
-                text=self._texto_item({"nombre": producto.nombre, "precio_unitario": producto.precio, "cantidad": 1}),
-                anchor="w",
-                font=ctk.CTkFont(size=16),
-                height=40,
-                width=self._frame_factura.winfo_width() - 20
+                height=50,
+                border_width=1,
+                border_color="#555555",
+                corner_radius=6
             )
-            label.pack(fill="x", padx=8, pady=6)
+            item_frame.pack(fill="x", padx=8, pady=4)
+            item_frame.pack_propagate(False)
+            
+            # Configurar grid layout dentro del frame
+            item_frame.grid_columnconfigure(0, weight=0)  # Cantidad
+            item_frame.grid_columnconfigure(1, weight=1)  # Nombre
+            item_frame.grid_columnconfigure(2, weight=0)  # Precio
+            
+            # Cantidad
+            ctk.CTkLabel(
+                item_frame,
+                text=f"{1}",
+                font=ctk.CTkFont(size=14, weight="bold"),
+                width=40
+            ).grid(row=0, column=0, padx=8, pady=4, sticky="w")
+            
+            # Nombre
+            ctk.CTkLabel(
+                item_frame,
+                text=producto.nombre,
+                font=ctk.CTkFont(size=14),
+                anchor="w"
+            ).grid(row=0, column=1, padx=4, pady=4, sticky="ew")
+            
+            # Precio total
+            total = producto.precio * 1
+            ctk.CTkLabel(
+                item_frame,
+                text=f"${total:,.0f}",
+                font=ctk.CTkFont(size=14, weight="bold"),
+                width=80,
+                anchor="e"
+            ).grid(row=0, column=2, padx=8, pady=4, sticky="e")
 
             self._items[pid] = {
                 "nombre": producto.nombre,
