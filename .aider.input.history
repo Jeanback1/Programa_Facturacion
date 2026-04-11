@@ -40,3 +40,12 @@
 
 # 2026-04-10 22:45:57.263591
 +hay un problema de logica, cuando hay mas de 1 item el nombre desaparece y aparecen numeros. revisa el codigo y busca el error y resuelvelo
+
+# 2026-04-11 16:08:40.391291
++y
+
+# 2026-04-11 16:12:46.900545
++en el archivo cuadre_view.py esta el boton "Cuadrar" en col_derecha, quiero que lo cambies a col_izquierda
+
+# 2026-04-11 16:12:49.557130
++y
