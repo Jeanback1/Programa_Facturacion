@@ -78,6 +78,17 @@ class CuadreView(ctk.CTkFrame):
 
         frame_btn = ctk.CTkFrame(col_izquierda, fg_color="transparent")
         frame_btn.grid(row=1, column=0, sticky="ew")
+        frame_btn.grid_columnconfigure(0, weight=1)
+        frame_btn.grid_columnconfigure(1, weight=0)
+
+        # Label con el total
+        self._lbl_total = ctk.CTkLabel(
+            frame_btn,
+            text="Total: $0",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            anchor="w"
+        )
+        self._lbl_total.grid(row=0, column=0, padx=(8, 0), pady=8, sticky="w")
 
         self._btn_cuadrar = ctk.CTkButton(
             frame_btn,
@@ -111,6 +122,7 @@ class CuadreView(ctk.CTkFrame):
         self._renderizar_facturas()
         self._renderizar_cuadres()
         self._actualizar_estado_boton()
+        self._actualizar_total()
 
     # ── Renderizado ─────────────────────────────────────────────────────────────
 
@@ -223,6 +235,11 @@ class CuadreView(ctk.CTkFrame):
     def _actualizar_estado_boton(self) -> None:
         """Habilita o deshabilita el botón Cuadrar según si hay facturas pendientes."""
         self._btn_cuadrar.configure(state="normal" if self._facturas else "disabled")
+
+    def _actualizar_total(self) -> None:
+        """Actualiza el label con el total acumulado de las facturas pendientes."""
+        total = sum(f.total for f in self._facturas)
+        self._lbl_total.configure(text=f"Total: ${total:,.0f}")
 
     # ── Acciones ────────────────────────────────────────────────────────────────
 
