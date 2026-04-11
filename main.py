@@ -40,6 +40,9 @@ class App(ctk.CTk):
         elif destino == "cuentas":
             from app.views.cuentas_view import CuentasView
             self._frame_actual = CuentasView(self, navigate=self.navigate)
+        elif destino == "cuadre":
+            from app.views.cuadre_view import CuadreView
+            self._frame_actual = CuadreView(self, navigate=self.navigate)
         else:
             raise ValueError(f"Destino desconocido: {destino!r}")
 

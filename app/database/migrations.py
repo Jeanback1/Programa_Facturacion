@@ -16,6 +16,9 @@ def run_migrations() -> None:
     try:
         _crear_tabla_usuarios(conn)
         _crear_tabla_productos(conn)
+        _crear_tabla_cuadres(conn)
+        _crear_tabla_facturas(conn)
+        _crear_tabla_factura_items(conn)
         _insertar_admin_inicial(conn)
         conn.commit()
     except Exception as e:
@@ -47,6 +50,45 @@ def _crear_tabla_productos(conn) -> None:
             id      INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre  TEXT    NOT NULL,
             precio  REAL    NOT NULL CHECK(precio >= 0)
+        )
+    """)
+
+
+def _crear_tabla_cuadres(conn) -> None:
+    """Crea la tabla de cuadres si no existe."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cuadres (
+            id           INTEGER  PRIMARY KEY AUTOINCREMENT,
+            hora_cuadre  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            usuario_id   INTEGER  NOT NULL REFERENCES usuarios(id),
+            total_cuadre REAL     NOT NULL CHECK(total_cuadre >= 0)
+        )
+    """)
+
+
+def _crear_tabla_facturas(conn) -> None:
+    """Crea la tabla de facturas si no existe."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS facturas (
+            id               INTEGER  PRIMARY KEY AUTOINCREMENT,
+            hora_facturacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+            total            REAL     NOT NULL CHECK(total >= 0),
+            usuario_id       INTEGER  NOT NULL REFERENCES usuarios(id),
+            cuadre_id        INTEGER  REFERENCES cuadres(id)
+        )
+    """)
+
+
+def _crear_tabla_factura_items(conn) -> None:
+    """Crea la tabla de ítems de factura si no existe."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS factura_items (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            factura_id      INTEGER NOT NULL REFERENCES facturas(id),
+            nombre          TEXT    NOT NULL,
+            precio_unitario REAL    NOT NULL CHECK(precio_unitario >= 0),
+            cantidad        INTEGER NOT NULL CHECK(cantidad > 0),
+            subtotal        REAL    NOT NULL CHECK(subtotal >= 0)
         )
     """)
 

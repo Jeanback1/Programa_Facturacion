@@ -6,7 +6,8 @@ from collections.abc import Callable
 import customtkinter as ctk
 
 from app.models.producto import Producto
-from app.repositories import producto_repo
+from app.repositories import factura_item_repo, factura_repo, producto_repo
+from app.session import Session
 
 _CARD_WIDTH: int = 150
 _CARD_HEIGHT: int = 165
@@ -352,8 +353,29 @@ class FacturarView(ctk.CTkFrame):
         return f"{item['cantidad']} - {item['nombre']} - ${total:,.0f}"
 
     def imprimir_factura(self) -> None:
-        """Envía la factura actual a impresión (placeholder)."""
-        print("imprimir_factura()")
+        """Guarda la factura actual en la base de datos y limpia el formulario."""
+        if not self._items:
+            self._label_total.configure(text="Sin ítems", text_color="#FF5555")
+            self.after(1500, lambda: self._label_total.configure(text="$0", text_color="#2ECC71"))
+            return
+
+        usuario_id = Session().usuario_actual.id
+        try:
+            factura = factura_repo.crear(total=self._total, usuario_id=usuario_id)
+            factura_item_repo.crear_items(factura.id, self._items)
+        except RuntimeError:
+            self._label_total.configure(text="Error al guardar", text_color="#FF5555")
+            self.after(
+                2000,
+                lambda: self._label_total.configure(
+                    text=f"${self._total:,.0f}", text_color="#2ECC71"
+                ),
+            )
+            return
+
+        self._limpiar_factura()
+        self._label_total.configure(text="Guardada ✓", text_color="#2ECC71")
+        self.after(1500, lambda: self._label_total.configure(text="$0"))
 
     def _volver_a_home(self) -> None:
         """Regresa a la pantalla principal."""
