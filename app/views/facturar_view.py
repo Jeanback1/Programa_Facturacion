@@ -8,6 +8,10 @@ import customtkinter as ctk
 from app.models.producto import Producto
 from app.repositories import producto_repo
 
+_CARD_WIDTH: int = 150
+_CARD_HEIGHT: int = 165
+_CARD_GAP: int = 8
+
 
 class FacturarView(ctk.CTkFrame):
     """Frame de facturación con catálogo de productos y lista de la factura actual."""
@@ -27,6 +31,11 @@ class FacturarView(ctk.CTkFrame):
 
         # Productos cargados desde la BD (se usan para filtrar en búsqueda)
         self._todos_productos: list[Producto] = producto_repo.listar_todos()
+
+        # Estado de la cuadrícula del catálogo
+        self._productos_actuales: list[Producto] = []
+        self._num_columnas: int = 3          # default seguro; se corrige al primer <Configure>
+        self._reflow_job: str | None = None  # handle de debounce para resize
 
         self._construir_ui()
         self._renderizar_catalogo(self._todos_productos)
@@ -83,6 +92,11 @@ class FacturarView(ctk.CTkFrame):
             label_font=ctk.CTkFont(size=13, weight="bold"),
         )
         self._frame_catalogo.grid(row=0, column=0, sticky="nsew")
+        self._frame_catalogo._parent_canvas.bind(
+            "<Configure>",
+            self._on_catalogo_resize,
+            add="+",
+        )
 
         # ── Columna derecha — Lista de la factura ───────────────────
         col_derecha = ctk.CTkFrame(area_columnas)
@@ -148,8 +162,24 @@ class FacturarView(ctk.CTkFrame):
 
     # ── Catálogo ────────────────────────────────────────────────────────────────
 
+    def _on_catalogo_resize(self, event: object) -> None:
+        """Debounce del evento <Configure> del canvas del catálogo."""
+        if self._reflow_job is not None:
+            self.after_cancel(self._reflow_job)
+        self._reflow_job = self.after(120, lambda: self._reflow_grid(event.width))
+
+    def _reflow_grid(self, canvas_width: int) -> None:
+        """Recalcula columnas y re-renderiza el catálogo si el número cambió."""
+        self._reflow_job = None
+        cols = max(1, canvas_width // (_CARD_WIDTH + _CARD_GAP))
+        if cols != self._num_columnas:
+            self._num_columnas = cols
+            self._renderizar_catalogo(self._productos_actuales)
+
     def _renderizar_catalogo(self, productos: list[Producto]) -> None:
         """Limpia el catálogo y lo re-renderiza con la lista de productos dada."""
+        self._productos_actuales = productos
+
         for widget in self._frame_catalogo.winfo_children():
             widget.destroy()
 
@@ -162,38 +192,53 @@ class FacturarView(ctk.CTkFrame):
             ).pack(pady=24)
             return
 
-        for producto in productos:
-            self._crear_tarjeta_producto(producto)
+        cols = self._num_columnas
 
-    def _crear_tarjeta_producto(self, producto: Producto) -> None:
-        """Crea una tarjeta de producto en el catálogo."""
-        tarjeta = ctk.CTkFrame(self._frame_catalogo)
-        tarjeta.pack(fill="x", padx=4, pady=3)
+        # Limpiar columnas sobrantes de un layout anterior más ancho
+        for c in range(cols, cols + 10):
+            self._frame_catalogo.grid_columnconfigure(c, weight=0, minsize=0)
+        for c in range(cols):
+            self._frame_catalogo.grid_columnconfigure(c, weight=1, minsize=_CARD_WIDTH)
+
+        for idx, producto in enumerate(productos):
+            self._crear_tarjeta_producto(producto, row=idx // cols, col=idx % cols)
+
+    def _crear_tarjeta_producto(self, producto: Producto, *, row: int, col: int) -> None:
+        """Crea una tarjeta de producto cuadrada en la posición (row, col) del grid."""
+        tarjeta = ctk.CTkFrame(
+            self._frame_catalogo,
+            width=_CARD_WIDTH,
+            height=_CARD_HEIGHT,
+            corner_radius=8,
+        )
+        tarjeta.grid(
+            row=row, column=col,
+            padx=_CARD_GAP // 2, pady=_CARD_GAP // 2,
+            sticky="n",
+        )
+        tarjeta.grid_propagate(False)
+
+        tarjeta.grid_rowconfigure(0, weight=1)   # área del nombre: crece
+        tarjeta.grid_rowconfigure(1, weight=0)   # botón: altura fija
         tarjeta.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
             tarjeta,
             text=producto.nombre,
-            anchor="w",
-            font=ctk.CTkFont(size=13, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=12, pady=(8, 0))
-
-        ctk.CTkLabel(
-            tarjeta,
-            text=f"${producto.precio:,.0f}",
-            anchor="w",
-            text_color="gray",
-            font=ctk.CTkFont(size=12),
-        ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 8))
+            font=ctk.CTkFont(size=12, weight="bold"),
+            wraplength=_CARD_WIDTH - 16,
+            anchor="center",
+            justify="center",
+        ).grid(row=0, column=0, padx=8, pady=(10, 4), sticky="nsew")
 
         ctk.CTkButton(
             tarjeta,
             text="Agregar",
-            width=90,
-            height=32,
+            width=_CARD_WIDTH - 24,
+            height=30,
             font=ctk.CTkFont(size=12),
             command=lambda p=producto: self._agregar_a_factura(p),
-        ).grid(row=0, column=1, rowspan=2, padx=12, pady=8)
+        ).grid(row=1, column=0, padx=12, pady=(0, 10))
 
     def _buscar_producto(self) -> None:
         """Filtra el catálogo según el texto ingresado en la barra de búsqueda."""
