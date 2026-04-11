@@ -260,11 +260,17 @@ class FacturarView(ctk.CTkFrame):
         if pid in self._items:
             self._items[pid]["cantidad"] += 1
             item = self._items[pid]
-            # Actualizar cantidad
-            item["label"].children["!ctklabel"].configure(text=f"{item['cantidad']}")
-            # Actualizar precio total
+            item_frame = item["label"]
+            
+            # Obtener referencias confiables a los labels
+            cantidad_label = item_frame.winfo_children()[0]
+            nombre_label = item_frame.winfo_children()[1]
+            precio_label = item_frame.winfo_children()[2]
+            
+            # Actualizar cantidad y precio manteniendo el nombre
+            cantidad_label.configure(text=f"{item['cantidad']}")
             total = item["precio_unitario"] * item["cantidad"]
-            item["label"].children["!ctklabel2"].configure(text=f"${total:,.0f}")
+            precio_label.configure(text=f"${total:,.0f}")
         else:
             # Ocultar el placeholder al agregar el primer ítem
             if not self._items:
