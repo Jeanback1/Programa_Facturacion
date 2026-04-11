@@ -74,24 +74,10 @@ class CuadreView(ctk.CTkFrame):
             label_text="Facturas pendientes",
             label_font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self._frame_facturas.grid(row=0, column=0, sticky="nsew")
+        self._frame_facturas.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
 
-        # ── Columna derecha — Historial + botón ────────────────────
-        col_derecha = ctk.CTkFrame(body)
-        col_derecha.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        col_derecha.grid_rowconfigure(0, weight=1)
-        col_derecha.grid_rowconfigure(1, weight=0)
-        col_derecha.grid_columnconfigure(0, weight=1)
-
-        self._frame_cuadres = ctk.CTkScrollableFrame(
-            col_derecha,
-            label_text="Historial",
-            label_font=ctk.CTkFont(size=13, weight="bold"),
-        )
-        self._frame_cuadres.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8, 4))
-
-        frame_btn = ctk.CTkFrame(col_derecha, fg_color="transparent")
-        frame_btn.grid(row=1, column=0, sticky="ew", padx=8, pady=(4, 12))
+        frame_btn = ctk.CTkFrame(col_izquierda, fg_color="transparent")
+        frame_btn.grid(row=1, column=0, sticky="ew")
 
         self._btn_cuadrar = ctk.CTkButton(
             frame_btn,
@@ -102,6 +88,19 @@ class CuadreView(ctk.CTkFrame):
             command=self._cuadrar,
         )
         self._btn_cuadrar.pack(fill="x")
+
+        # ── Columna derecha — Historial ────────────────────────────
+        col_derecha = ctk.CTkFrame(body)
+        col_derecha.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        col_derecha.grid_columnconfigure(0, weight=1)
+        col_derecha.grid_rowconfigure(0, weight=1)
+
+        self._frame_cuadres = ctk.CTkScrollableFrame(
+            col_derecha,
+            label_text="Historial",
+            label_font=ctk.CTkFont(size=13, weight="bold"),
+        )
+        self._frame_cuadres.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
 
     # ── Datos ───────────────────────────────────────────────────────────────────
 
