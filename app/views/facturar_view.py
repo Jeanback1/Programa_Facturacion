@@ -210,6 +210,8 @@ class FacturarView(ctk.CTkFrame):
             width=_CARD_WIDTH,
             height=_CARD_HEIGHT,
             corner_radius=8,
+            border_width=2,
+            border_color='#555555'
         )
         tarjeta.grid(
             row=row, column=col,
