@@ -98,7 +98,7 @@ class CuadreView(ctk.CTkFrame):
             state="disabled",
             command=self._cuadrar,
         )
-        self._btn_cuadrar.pack(fill="x")
+        self._btn_cuadrar.grid(row=0, column=1, padx=(0, 8), pady=8, sticky="e")
 
         # ── Columna derecha — Historial ────────────────────────────
         col_derecha = ctk.CTkFrame(body)
