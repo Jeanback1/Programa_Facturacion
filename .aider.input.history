@@ -49,3 +49,14 @@
 
 # 2026-04-11 16:12:49.557130
 +y
+
+# 2026-04-11 16:27:26.074738
++dentro de app/views/cuadre_view.py existe el frame_btn que en este momento solo tiene el boton. Pues al lado izquiero del boton agrega letras que digan Total: {total} y este sera la suma de factura.total que hayan en la col_izquierda en ese momento
+
+# 2026-04-11 16:27:27.801980
++y
+
+# 2026-04-11 16:38:40.859316
++hay un problema en cuadre_view.py En Tkinter, un mismo contenedor (Frame) no puede usar pack() y grid() al mismo tiempo para sus hijos. Es como intentar seguir dos mapas de navegación distintos para la misma habitación; el programa se confunde y se bloquea.
++
++Si un solo widget dentro de ese frame usó .grid(), todos los demás widgets que pongas dentro de ese mismo frame deben usar .grid(). No puedes usar .pack() ahí.
