@@ -59,6 +59,17 @@ def crear(nombre: str, username: str, password_hash: str, rol: str) -> Usuario:
         raise RuntimeError(f"Error creando usuario '{username}': {e}") from e
 
 
+def eliminar(id: int) -> None:
+    """Elimina permanentemente un usuario por su ID."""
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM usuarios WHERE id = ?", (id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        raise RuntimeError(f"Error eliminando usuario {id}: {e}") from e
+
+
 def cambiar_estado(id: int, activo: bool) -> None:
     """Activa o desactiva un usuario por su ID."""
     conn = get_connection()
