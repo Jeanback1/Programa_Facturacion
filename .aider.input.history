@@ -1,0 +1,42 @@
+
+# 2026-04-10 22:25:28.851251
++n
+
+# 2026-04-10 22:25:36.760735
++hola
+
+# 2026-04-10 22:26:56.595466
++no
+
+# 2026-04-10 22:27:02.871313
++exit
+
+# 2026-04-10 22:34:57.260736
++no
+
+# 2026-04-10 22:37:47.712272
++dentro de factura_view.py encontraras una funcion con el nombre de agregar_a_facutras done se agregan productos con el ctk.label de _fram_factura, eso tiene un nombre, un precio y una cantidad. Vamos a modificar el tama;o de esas tres cosas y lo haremos mas grande, para que llene la totalidad del ancho de el frame donde se aloja que es en frame_factura. Solo se hara cambios de tama;o, niguna logica tiene que ser cambiada
+
+# 2026-04-10 22:38:13.398753
++d
+
+# 2026-04-10 22:40:49.684211
++n
+
+# 2026-04-10 22:40:53.019135
++dentro de factura_view.py encontraras una funcion con el nombre de agregar_a_facutras done se agregan productos con el ctk.label de _
++> fram_factura, eso tiene un nombre, un precio y una cantidad. Vamos a modificar el tama;o de esas tres cosas y lo haremos mas grande, 
++> para que llene la totalidad del ancho de el frame donde se aloja que es en frame_factura. Solo se hara cambios de tama;o, niguna logi
++> ca tiene que ser cambiada     
+
+# 2026-04-10 22:40:58.727930
++y
+
+# 2026-04-10 22:44:03.495599
++no solo le cambiaremos el tama;o, cambiemos su dise;o, que cada uno de los intems se agrupen en un recuerdo. cantida, nombre y preciodentro de un recuadro.
+
+# 2026-04-10 22:44:47.715425
++y
+
+# 2026-04-10 22:45:57.263591
++hay un problema de logica, cuando hay mas de 1 item el nombre desaparece y aparecen numeros. revisa el codigo y busca el error y resuelvelo

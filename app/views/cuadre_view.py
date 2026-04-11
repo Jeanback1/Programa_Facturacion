@@ -197,7 +197,7 @@ class CuadreView(ctk.CTkFrame):
             self._crear_fila_cuadre(cuadre)
 
     def _crear_fila_cuadre(self, cuadre: Cuadre) -> None:
-        """Crea una fila compacta para un cuadre en el historial."""
+        """Crea una fila compacta con la fecha a la izquierda y el total a la derecha"""
         fila = ctk.CTkFrame(
             self._frame_cuadres,
             border_width=1,
@@ -206,20 +206,20 @@ class CuadreView(ctk.CTkFrame):
         )
         fila.pack(fill="x", padx=4, pady=3)
 
+        # Texto a la izquierda (Fecha/Hora)
         ctk.CTkLabel(
             fila,
             text=cuadre.hora_cuadre[:16],
             font=ctk.CTkFont(size=11),
-            text_color="gray",
-            anchor="w",
-        ).pack(fill="x", padx=8, pady=(6, 2))
+            text_color="white",
+        ).pack(side="left", padx=10, pady=8)
 
+        # Texto a la derecha (Total)
         ctk.CTkLabel(
             fila,
             text=f"${cuadre.total_cuadre:,.0f}",
             font=ctk.CTkFont(size=13, weight="bold"),
-            anchor="w",
-        ).pack(fill="x", padx=8, pady=(2, 6))
+        ).pack(side="right", padx=10, pady=8)
 
     def _actualizar_estado_boton(self) -> None:
         """Habilita o deshabilita el botón Cuadrar según si hay facturas pendientes."""
