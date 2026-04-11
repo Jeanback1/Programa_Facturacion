@@ -12,5 +12,5 @@ class FacturaItem:
     factura_id: int
     nombre: str             # snapshot del nombre al momento de la venta
     precio_unitario: float
-    cantidad: int
+    cantidad: float
     subtotal: float

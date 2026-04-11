@@ -20,6 +20,9 @@ def run_migrations() -> None:
         _crear_tabla_facturas(conn)
         _crear_tabla_factura_items(conn)
         _insertar_admin_inicial(conn)
+        columnas = {fila[1] for fila in conn.execute("PRAGMA table_info(facturas)")}
+        if "detalle" not in columnas:
+            conn.execute("ALTER TABLE facturas ADD COLUMN detalle TEXT")
         conn.commit()
     except Exception as e:
         conn.rollback()

@@ -14,3 +14,4 @@ class Factura:
     total: float
     usuario_id: int
     cuadre_id: Optional[int] # None = no cuadrada aún
+    detalle: Optional[str] = None

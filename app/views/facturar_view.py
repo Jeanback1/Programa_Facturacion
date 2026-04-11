@@ -161,6 +161,23 @@ class FacturarView(ctk.CTkFrame):
             command=self._limpiar_factura,
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
 
+        # ── Detalle de la factura ───────────────────────────────────
+        frame_detalle = ctk.CTkFrame(col_derecha, fg_color="transparent")
+        frame_detalle.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 8))
+
+        ctk.CTkLabel(
+            frame_detalle,
+            text="Detalle:",
+            font=ctk.CTkFont(size=13),
+        ).pack(anchor="w", padx=4)
+
+        self._entry_detalle = ctk.CTkEntry(
+            frame_detalle,
+            placeholder_text="Nota opcional...",
+            height=36,
+        )
+        self._entry_detalle.pack(fill="x", padx=4)
+
     # ── Catálogo ────────────────────────────────────────────────────────────────
 
     def _on_catalogo_resize(self, event: object) -> None:
@@ -261,17 +278,9 @@ class FacturarView(ctk.CTkFrame):
         if pid in self._items:
             self._items[pid]["cantidad"] += 1
             item = self._items[pid]
-            item_frame = item["label"]
-            
-            # Obtener referencias confiables a los labels
-            cantidad_label = item_frame.winfo_children()[0]
-            nombre_label = item_frame.winfo_children()[1]
-            precio_label = item_frame.winfo_children()[2]
-            
-            # Actualizar cantidad y precio manteniendo el nombre
-            cantidad_label.configure(text=f"{item['cantidad']}")
+            item["lbl_cantidad"].configure(text=f"{item['cantidad']:g}")
             total = item["precio_unitario"] * item["cantidad"]
-            precio_label.configure(text=f"${total:,.0f}")
+            item["lbl_precio"].configure(text=f"${total:,.0f}")
         else:
             # Ocultar el placeholder al agregar el primer ítem
             if not self._items:
@@ -286,47 +295,114 @@ class FacturarView(ctk.CTkFrame):
             )
             item_frame.pack(fill="x", padx=8, pady=4)
             item_frame.pack_propagate(False)
-            
-            # Configurar grid layout dentro del frame
+
             item_frame.grid_columnconfigure(0, weight=0)  # Cantidad
-            item_frame.grid_columnconfigure(1, weight=1)  # Nombre
-            item_frame.grid_columnconfigure(2, weight=0)  # Precio
-            
-            # Cantidad
-            ctk.CTkLabel(
+            item_frame.grid_columnconfigure(1, weight=0)  # Botón +
+            item_frame.grid_columnconfigure(2, weight=1)  # Nombre
+            item_frame.grid_columnconfigure(3, weight=0)  # Precio
+
+            lbl_cantidad = ctk.CTkLabel(
                 item_frame,
-                text=f"{1}",
+                text="1",
                 font=ctk.CTkFont(size=14, weight="bold"),
-                width=40
-            ).grid(row=0, column=0, padx=8, pady=4, sticky="w")
-            
-            # Nombre
+                width=40,
+            )
+            lbl_cantidad.grid(row=0, column=0, padx=(8, 0), pady=4, sticky="w")
+
+            ctk.CTkButton(
+                item_frame,
+                text="+",
+                width=24,
+                height=24,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="transparent",
+                border_width=1,
+                command=lambda p=pid: self._abrir_popup_cantidad(p),
+            ).grid(row=0, column=1, padx=4, pady=4)
+
             ctk.CTkLabel(
                 item_frame,
                 text=producto.nombre,
                 font=ctk.CTkFont(size=14),
-                anchor="w"
-            ).grid(row=0, column=1, padx=4, pady=4, sticky="ew")
-            
-            # Precio total
-            total = producto.precio * 1
-            ctk.CTkLabel(
+                anchor="w",
+            ).grid(row=0, column=2, padx=4, pady=4, sticky="ew")
+
+            lbl_precio = ctk.CTkLabel(
                 item_frame,
-                text=f"${total:,.0f}",
+                text=f"${producto.precio:,.0f}",
                 font=ctk.CTkFont(size=14, weight="bold"),
                 width=80,
-                anchor="e"
-            ).grid(row=0, column=2, padx=8, pady=4, sticky="e")
+                anchor="e",
+            )
+            lbl_precio.grid(row=0, column=3, padx=8, pady=4, sticky="e")
 
             self._items[pid] = {
                 "nombre": producto.nombre,
                 "precio_unitario": producto.precio,
                 "cantidad": 1,
                 "label": item_frame,
+                "lbl_cantidad": lbl_cantidad,
+                "lbl_precio": lbl_precio,
             }
 
         self._total += producto.precio
         self._label_total.configure(text=f"${self._total:,.0f}")
+
+    def _abrir_popup_cantidad(self, pid: int) -> None:
+        """Abre un popup para editar la cantidad de un ítem (soporta decimales)."""
+        item = self._items[pid]
+        raiz = self.winfo_toplevel()
+
+        popup = ctk.CTkToplevel(raiz)
+        popup.title("Editar cantidad")
+        popup.resizable(False, False)
+        popup.transient(raiz)
+
+        ancho, alto = 300, 170
+        raiz.update_idletasks()
+        x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
+        popup.geometry(f"{ancho}x{alto}+{x}+{y}")
+        popup.after(50, popup.grab_set)
+
+        ctk.CTkLabel(
+            popup,
+            text=f"Cantidad — {item['nombre']}",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            wraplength=260,
+        ).pack(pady=(16, 6), padx=16)
+
+        entry = ctk.CTkEntry(popup, width=200)
+        entry.insert(0, f"{item['cantidad']:g}")
+        entry.pack(pady=4, padx=16)
+        entry.focus()
+
+        lbl_error = ctk.CTkLabel(popup, text="", text_color="#FF5555", font=ctk.CTkFont(size=11))
+        lbl_error.pack()
+
+        def _confirmar() -> None:
+            try:
+                nueva = float(entry.get().replace(",", "."))
+            except ValueError:
+                lbl_error.configure(text="Valor inválido")
+                return
+            if nueva <= 0:
+                lbl_error.configure(text="Debe ser mayor a 0")
+                return
+
+            anterior_subtotal = item["precio_unitario"] * item["cantidad"]
+            self._total -= anterior_subtotal
+            item["cantidad"] = nueva
+            nuevo_subtotal = item["precio_unitario"] * nueva
+            self._total += nuevo_subtotal
+
+            item["lbl_cantidad"].configure(text=f"{nueva:g}")
+            item["lbl_precio"].configure(text=f"${nuevo_subtotal:,.0f}")
+            self._label_total.configure(text=f"${self._total:,.0f}")
+            popup.destroy()
+
+        ctk.CTkButton(popup, text="Aceptar", width=120, command=_confirmar).pack(pady=(6, 16))
+        popup.bind("<Return>", lambda _e: _confirmar())
 
     def _limpiar_factura(self) -> None:
         """Elimina todos los productos de la factura y resetea el total."""
@@ -336,6 +412,7 @@ class FacturarView(ctk.CTkFrame):
         self._items.clear()
         self._total = 0.0
         self._label_total.configure(text="$0")
+        self._entry_detalle.delete(0, "end")
 
         # Restaurar el placeholder
         self._placeholder_factura = ctk.CTkLabel(
@@ -360,8 +437,9 @@ class FacturarView(ctk.CTkFrame):
             return
 
         usuario_id = Session().usuario_actual.id
+        detalle = self._entry_detalle.get().strip() or None
         try:
-            factura = factura_repo.crear(total=self._total, usuario_id=usuario_id)
+            factura = factura_repo.crear(total=self._total, usuario_id=usuario_id, detalle=detalle)
             factura_item_repo.crear_items(factura.id, self._items)
         except RuntimeError:
             self._label_total.configure(text="Error al guardar", text_color="#FF5555")

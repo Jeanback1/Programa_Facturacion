@@ -154,7 +154,7 @@ class CuadreView(ctk.CTkFrame):
         )
         fila.pack(fill="x", padx=8, pady=3)
         fila.pack_propagate(False)
-        fila.grid_columnconfigure(1, weight=1)
+        fila.grid_columnconfigure(2, weight=1)
 
         ctk.CTkLabel(
             fila,
@@ -164,12 +164,24 @@ class CuadreView(ctk.CTkFrame):
             anchor="center",
         ).grid(row=0, column=0, padx=(8, 4), pady=4)
 
+        detalle_texto = (factura.detalle or "")[:25]
+        lbl_detalle = ctk.CTkLabel(
+            fila,
+            text=detalle_texto,
+            font=ctk.CTkFont(size=12),
+            anchor="w",
+            width=120,
+            cursor="hand2",
+        )
+        lbl_detalle.grid(row=0, column=1, padx=4, pady=4, sticky="w")
+        lbl_detalle.bind("<Button-1>", lambda _e, f=factura: self._abrir_detalle(f))
+
         ctk.CTkLabel(
             fila,
             text=factura.hora_facturacion[11:16],
             font=ctk.CTkFont(size=13),
             anchor="w",
-        ).grid(row=0, column=1, padx=4, pady=4, sticky="w")
+        ).grid(row=0, column=2, padx=4, pady=4, sticky="w")
 
         ctk.CTkLabel(
             fila,
@@ -177,7 +189,7 @@ class CuadreView(ctk.CTkFrame):
             font=ctk.CTkFont(size=13, weight="bold"),
             width=90,
             anchor="e",
-        ).grid(row=0, column=2, padx=(4, 8), pady=4)
+        ).grid(row=0, column=3, padx=(4, 8), pady=4)
 
         ctk.CTkButton(
             fila,
@@ -188,7 +200,7 @@ class CuadreView(ctk.CTkFrame):
             fg_color="transparent",
             border_width=1,
             command=lambda f=factura: self._ver_detalles(f),
-        ).grid(row=0, column=3, padx=(0, 8), pady=4)
+        ).grid(row=0, column=4, padx=(0, 8), pady=4)
 
     def _renderizar_cuadres(self) -> None:
         """Limpia y re-renderiza el historial de cuadres."""
@@ -312,6 +324,34 @@ class CuadreView(ctk.CTkFrame):
             width=120,
             command=dialogo.destroy,
         ).pack(pady=(0, 16))
+
+    def _abrir_detalle(self, factura: Factura) -> None:
+        """Abre popup con el detalle completo de la factura."""
+        raiz = self.winfo_toplevel()
+        dialogo = ctk.CTkToplevel(raiz)
+        dialogo.title(f"Detalle — Factura #{factura.id}")
+        dialogo.resizable(False, False)
+        dialogo.transient(raiz)
+
+        ancho, alto = 360, 200
+        raiz.update_idletasks()
+        x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
+        dialogo.geometry(f"{ancho}x{alto}+{x}+{y}")
+        dialogo.after(50, dialogo.grab_set)
+
+        ctk.CTkLabel(
+            dialogo,
+            text=f"Factura #{factura.id}",
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(pady=(16, 6))
+
+        texto = ctk.CTkTextbox(dialogo, height=80)
+        texto.pack(fill="x", padx=16, pady=(0, 8))
+        texto.insert("1.0", factura.detalle or "(sin detalle)")
+        texto.configure(state="disabled")
+
+        ctk.CTkButton(dialogo, text="Cerrar", width=100, command=dialogo.destroy).pack(pady=(0, 16))
 
     def _cuadrar(self) -> None:
         """Crea un cuadre agrupando todas las facturas pendientes del usuario (transacción atómica)."""
