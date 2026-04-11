@@ -315,7 +315,7 @@ class FacturarView(ctk.CTkFrame):
                 "nombre": producto.nombre,
                 "precio_unitario": producto.precio,
                 "cantidad": 1,
-                "label": label,
+                "label": item_frame,
             }
 
         self._total += producto.precio
