@@ -1,24 +1,26 @@
 # -*- coding: utf-8 -*-
 """Vista principal post-login."""
 
+from collections.abc import Callable
+
 import customtkinter as ctk
 
 from app.session import Session
 
 
-class HomeView(ctk.CTk):
-    """Pantalla principal de la aplicación, visible tras autenticarse."""
+class HomeView(ctk.CTkFrame):
+    """Frame principal de la aplicación, visible tras autenticarse."""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, master: ctk.CTk, navigate: Callable[[str], None]) -> None:
+        super().__init__(master, fg_color="transparent")
+        self._navigate = navigate
 
         session = Session()
-        self.title(f"Facturación — {session.usuario_actual.nombre}")
-        self.geometry("860x560")
-        self.minsize(640, 420)
-
-        # Interceptar el cierre de ventana para limpiar la sesión
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        master.title(f"Facturación — {session.usuario_actual.nombre}")
+        master.geometry("860x560")
+        master.minsize(640, 420)
+        master.resizable(True, True)
+        master.protocol("WM_DELETE_WINDOW", master.destroy)
 
         self._construir_ui()
 
@@ -78,14 +80,14 @@ class HomeView(ctk.CTk):
         ctk.CTkButton(
             botones_frame,
             text="Facturar",
-            command=lambda: self._navegar("Facturar"),
+            command=lambda: self._navigate("facturar"),
             **btn_kwargs,
         ).grid(row=0, column=0, padx=18, pady=10)
 
         ctk.CTkButton(
             botones_frame,
             text="Cuadre",
-            command=lambda: self._navegar("Cuadre"),
+            command=lambda: print("Navegar a: Cuadre"),
             **btn_kwargs,
         ).grid(row=0, column=1, padx=18, pady=10)
 
@@ -94,26 +96,13 @@ class HomeView(ctk.CTk):
             ctk.CTkButton(
                 botones_frame,
                 text="Gestión",
-                command=lambda: self._navegar("Gestión"),
+                command=lambda: print("Navegar a: Gestión"),
                 **btn_kwargs,
             ).grid(row=0, column=2, padx=18, pady=10)
 
     # ── Acciones ───────────────────────────────────────────────────────────────
 
-    def _navegar(self, destino: str) -> None:
-        """Placeholder para la navegación a módulos futuros."""
-        print(f"Navegar a: {destino}")
-
     def _cerrar_sesion(self) -> None:
         """Limpia la sesión activa y regresa a la pantalla de login."""
         Session().cerrar_sesion()
-        self._abrir_login()
-
-    def _abrir_login(self) -> None:
-        """Destruye esta ventana y abre la pantalla de login."""
-        # Importación diferida para evitar ciclo de importaciones
-        from app.views.login_view import LoginView
-
-        self.destroy()
-        app = LoginView()
-        app.mainloop()
+        self._navigate("login")

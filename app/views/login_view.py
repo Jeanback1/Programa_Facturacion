@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Vista de inicio de sesión."""
 
+from collections.abc import Callable
+
 import bcrypt
 import customtkinter as ctk
 
@@ -8,28 +10,27 @@ from app.repositories import usuario_repo
 from app.session import Session
 
 
-class LoginView(ctk.CTk):
-    """Ventana de login. Es la raíz de la aplicación CustomTkinter."""
+class LoginView(ctk.CTkFrame):
+    """Frame de login. Se monta dentro de la ventana raíz App."""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, master: ctk.CTk, navigate: Callable[[str], None]) -> None:
+        super().__init__(master, fg_color="transparent")
+        self._navigate = navigate
 
-        self.title("Facturación — Iniciar sesión")
-        self.resizable(False, False)
-        self._centrar_ventana(420, 520)
+        # Configurar la ventana raíz para esta vista
+        master.title("Facturación — Iniciar sesión")
+        master.resizable(False, False)
+        master.update_idletasks()
+        ancho, alto = 420, 520
+        x = (master.winfo_screenwidth() // 2) - (ancho // 2)
+        y = (master.winfo_screenheight() // 2) - (alto // 2)
+        master.geometry(f"{ancho}x{alto}+{x}+{y}")
 
         self._construir_ui()
 
         # Enter también dispara el intento de login
-        self.bind("<Return>", lambda _event: self._intentar_login())
+        master.bind("<Return>", lambda _event: self._intentar_login())
         self._campo_usuario.focus()
-
-    def _centrar_ventana(self, ancho: int, alto: int) -> None:
-        """Posiciona la ventana en el centro de la pantalla."""
-        self.update_idletasks()
-        x = (self.winfo_screenwidth() // 2) - (ancho // 2)
-        y = (self.winfo_screenheight() // 2) - (alto // 2)
-        self.geometry(f"{ancho}x{alto}+{x}+{y}")
 
     def _construir_ui(self) -> None:
         """Construye todos los widgets de la pantalla de login."""
@@ -89,7 +90,7 @@ class LoginView(ctk.CTk):
     # ── Lógica ─────────────────────────────────────────────────────────────────
 
     def _intentar_login(self) -> None:
-        """Valida las credenciales y abre la pantalla principal si son correctas."""
+        """Valida las credenciales y navega a home si son correctas."""
         username = self._campo_usuario.get().strip()
         password = self._campo_password.get()
 
@@ -118,19 +119,9 @@ class LoginView(ctk.CTk):
             self._campo_password.focus()
             return
 
-        # Login exitoso — iniciar sesión y abrir home
         Session().iniciar_sesion(usuario)
-        self._abrir_home()
+        self._navigate("home")
 
     def _mostrar_error(self, mensaje: str) -> None:
         """Muestra un mensaje de error en rojo debajo de los campos."""
         self._label_error.configure(text=mensaje)
-
-    def _abrir_home(self) -> None:
-        """Destruye esta ventana y abre la pantalla principal."""
-        # Importación diferida para evitar ciclo de importaciones
-        from app.views.home_view import HomeView
-
-        self.destroy()
-        app = HomeView()
-        app.mainloop()
