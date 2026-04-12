@@ -10,7 +10,7 @@ from app.repositories import factura_item_repo, factura_repo, producto_repo
 from app.session import Session
 
 _CARD_WIDTH: int = 150
-_CARD_HEIGHT: int = 165
+_CARD_HEIGHT: int = 100
 _CARD_GAP: int = 8
 
 
