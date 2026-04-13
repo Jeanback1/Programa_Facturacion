@@ -66,7 +66,7 @@ class FacturarView(ctk.CTkFrame):
 
         self._campo_busqueda = ctk.CTkEntry(
             frame_busqueda,
-            placeholder_text="Buscar producto...",
+            placeholder_text="Buscar por nombre o #id...",
             height=40,
             font=ctk.CTkFont(size=14),
         )
@@ -238,14 +238,15 @@ class FacturarView(ctk.CTkFrame):
         )
         tarjeta.grid_propagate(False)
 
-        tarjeta.grid_rowconfigure(0, weight=1)   # área del nombre: crece
+        tarjeta.grid_rowconfigure(0, weight=1)   # área del nombre+id: crece
         tarjeta.grid_rowconfigure(1, weight=0)   # botón: altura fija
         tarjeta.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
             tarjeta,
-            text=producto.nombre,
+            text=f"#{producto.id} - {producto.nombre}",
             font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="white",
             wraplength=_CARD_WIDTH - 16,
             anchor="center",
             justify="center",
@@ -261,10 +262,14 @@ class FacturarView(ctk.CTkFrame):
         ).grid(row=1, column=0, padx=12, pady=(0, 10))
 
     def _buscar_producto(self) -> None:
-        """Filtra el catálogo según el texto ingresado en la barra de búsqueda."""
+        """Filtra el catálogo por nombre o por id (soporta prefijo #)."""
         termino = self._campo_busqueda.get().strip().lower()
         if termino:
-            filtrados = [p for p in self._todos_productos if termino in p.nombre.lower()]
+            id_termino = termino.lstrip("#").strip()
+            filtrados = [
+                p for p in self._todos_productos
+                if termino in p.nombre.lower() or id_termino in str(p.id)
+            ]
         else:
             filtrados = self._todos_productos
         self._renderizar_catalogo(filtrados)
