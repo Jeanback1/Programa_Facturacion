@@ -91,7 +91,7 @@ class HomeView(ctk.CTkFrame):
             **btn_kwargs,
         ).grid(row=0, column=1, padx=18, pady=10)
 
-        # Los botones de Gestión y Administrar Cuentas solo se agregan para administradores
+        # Los botones de Gestión, Administrar Cuentas y Configuración solo para admin
         if session.es_admin():
             ctk.CTkButton(
                 botones_frame,
@@ -106,6 +106,13 @@ class HomeView(ctk.CTkFrame):
                 command=lambda: self._navigate("cuentas"),
                 **btn_kwargs,
             ).grid(row=1, column=1, padx=18, pady=10)
+
+            ctk.CTkButton(
+                botones_frame,
+                text="Configuración",
+                command=lambda: self._navigate("configuracion"),
+                **btn_kwargs,
+            ).grid(row=2, column=0, columnspan=2, padx=18, pady=10)
 
     # ── Acciones ───────────────────────────────────────────────────────────────
 

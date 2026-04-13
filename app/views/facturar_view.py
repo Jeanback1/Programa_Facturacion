@@ -6,7 +6,8 @@ from collections.abc import Callable
 import customtkinter as ctk
 
 from app.models.producto import Producto
-from app.repositories import factura_item_repo, factura_repo, producto_repo
+from app.printing import impresora
+from app.repositories import configuracion_repo, factura_item_repo, factura_repo, producto_repo
 from app.session import Session
 
 _CARD_WIDTH: int = 150
@@ -435,17 +436,21 @@ class FacturarView(ctk.CTkFrame):
         return f"{item['cantidad']} - {item['nombre']} - ${total:,.0f}"
 
     def imprimir_factura(self) -> None:
-        """Guarda la factura actual en la base de datos y limpia el formulario."""
+        """Guarda la factura en la BD, la imprime y limpia el formulario."""
         if not self._items:
             self._label_total.configure(text="Sin ítems", text_color="#FF5555")
             self.after(1500, lambda: self._label_total.configure(text="$0", text_color="#2ECC71"))
             return
 
-        usuario_id = Session().usuario_actual.id
+        usuario = Session().usuario_actual
         detalle = self._entry_detalle.get().strip() or None
+        items_snapshot = dict(self._items)  # captura antes de limpiar
+
         try:
-            factura = factura_repo.crear(total=self._total, usuario_id=usuario_id, detalle=detalle)
-            factura_item_repo.crear_items(factura.id, self._items)
+            factura = factura_repo.crear(
+                total=self._total, usuario_id=usuario.id, detalle=detalle
+            )
+            factura_item_repo.crear_items(factura.id, items_snapshot)
         except RuntimeError:
             self._label_total.configure(text="Error al guardar", text_color="#FF5555")
             self.after(
@@ -457,8 +462,55 @@ class FacturarView(ctk.CTkFrame):
             return
 
         self._limpiar_factura()
-        self._label_total.configure(text="Guardada ✓", text_color="#2ECC71")
-        self.after(1500, lambda: self._label_total.configure(text="$0"))
+
+        try:
+            config = configuracion_repo.get_all()
+            impresora.imprimir_recibo(
+                factura=factura,
+                items=items_snapshot,
+                config=config,
+                nombre_cajera=usuario.nombre,
+                detalle=detalle,
+            )
+            self._label_total.configure(text="Impresa ✓", text_color="#2ECC71")
+        except Exception as exc:
+            self._label_total.configure(text="Guardada (sin imprimir)", text_color="#F39C12")
+            self._mostrar_error_impresion(str(exc))
+
+        self.after(2500, lambda: self._label_total.configure(text="$0", text_color="#2ECC71"))
+
+    def _mostrar_error_impresion(self, mensaje: str) -> None:
+        """Muestra un popup con el error de impresión."""
+        raiz = self.winfo_toplevel()
+        popup = ctk.CTkToplevel(raiz)
+        popup.title("Error de impresión")
+        popup.resizable(False, False)
+        popup.transient(raiz)
+
+        ancho, alto = 420, 200
+        raiz.update_idletasks()
+        x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
+        popup.geometry(f"{ancho}x{alto}+{x}+{y}")
+        popup.after(50, popup.grab_set)
+
+        ctk.CTkLabel(
+            popup,
+            text="La factura fue guardada pero no se pudo imprimir:",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            wraplength=380,
+        ).pack(pady=(18, 6), padx=16)
+
+        ctk.CTkLabel(
+            popup,
+            text=mensaje,
+            font=ctk.CTkFont(size=12),
+            text_color="#FF5555",
+            wraplength=380,
+        ).pack(pady=(0, 12), padx=16)
+
+        ctk.CTkButton(popup, text="Cerrar", width=100, command=popup.destroy).pack(pady=(0, 16))
+        popup.bind("<Return>", lambda _e: popup.destroy())
 
     def _volver_a_home(self) -> None:
         """Regresa a la pantalla principal."""

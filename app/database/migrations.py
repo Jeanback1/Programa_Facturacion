@@ -19,7 +19,9 @@ def run_migrations() -> None:
         _crear_tabla_cuadres(conn)
         _crear_tabla_facturas(conn)
         _crear_tabla_factura_items(conn)
+        _crear_tabla_configuracion(conn)
         _insertar_admin_inicial(conn)
+        _insertar_config_inicial(conn)
         columnas = {fila[1] for fila in conn.execute("PRAGMA table_info(facturas)")}
         if "detalle" not in columnas:
             conn.execute("ALTER TABLE facturas ADD COLUMN detalle TEXT")
@@ -94,6 +96,32 @@ def _crear_tabla_factura_items(conn) -> None:
             subtotal        REAL    NOT NULL CHECK(subtotal >= 0)
         )
     """)
+
+
+def _crear_tabla_configuracion(conn) -> None:
+    """Crea la tabla de configuración clave-valor si no existe."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS configuracion (
+            clave TEXT PRIMARY KEY,
+            valor TEXT NOT NULL DEFAULT ''
+        )
+    """)
+
+
+def _insertar_config_inicial(conn) -> None:
+    """Inserta los valores predeterminados de configuración si no existen."""
+    defaults = [
+        ("nombre_local",     "Mi Local"),
+        ("direccion",        ""),
+        ("telefono",         ""),
+        ("rnc",              ""),
+        ("mensaje_pie",      "¡Gracias por su compra!"),
+        ("impresora_nombre", "EPSON TM-T20II"),
+    ]
+    conn.executemany(
+        "INSERT OR IGNORE INTO configuracion (clave, valor) VALUES (?, ?)",
+        defaults,
+    )
 
 
 # ── Datos iniciales ────────────────────────────────────────────────────────────

@@ -43,6 +43,9 @@ class App(ctk.CTk):
         elif destino == "cuadre":
             from app.views.cuadre_view import CuadreView
             self._frame_actual = CuadreView(self, navigate=self.navigate)
+        elif destino == "configuracion":
+            from app.views.configuracion_view import ConfiguracionView
+            self._frame_actual = ConfiguracionView(self, navigate=self.navigate)
         else:
             raise ValueError(f"Destino desconocido: {destino!r}")
 
