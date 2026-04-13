@@ -167,6 +167,67 @@ class GestionView(ctk.CTkFrame):
                 font=ctk.CTkFont(size=13),
             ).grid(row=0, column=1, sticky="e", padx=8)
 
+            ctk.CTkButton(
+                fila,
+                text="Eliminar",
+                width=80,
+                height=26,
+                fg_color="transparent",
+                border_width=1,
+                text_color="#FF5555",
+                hover_color="#922B21",
+                font=ctk.CTkFont(size=12),
+                command=lambda prod=p: self._confirmar_eliminar(prod),
+            ).grid(row=0, column=2, sticky="e", padx=(4, 8))
+
+    def _confirmar_eliminar(self, producto) -> None:
+        """Abre un diálogo modal de confirmación antes de eliminar el producto."""
+        raiz = self.winfo_toplevel()
+        dialogo = ctk.CTkToplevel(raiz)
+        dialogo.title("Confirmar eliminación")
+        dialogo.resizable(False, False)
+        dialogo.transient(raiz)
+
+        ancho, alto = 360, 170
+        raiz.update_idletasks()
+        x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
+        dialogo.geometry(f"{ancho}x{alto}+{x}+{y}")
+        dialogo.after(50, dialogo.grab_set)
+
+        ctk.CTkLabel(
+            dialogo,
+            text=f'¿Eliminar "{producto.nombre}"?',
+            font=ctk.CTkFont(size=14),
+            justify="center",
+        ).pack(pady=(28, 20))
+
+        frame_btns = ctk.CTkFrame(dialogo, fg_color="transparent")
+        frame_btns.pack()
+
+        ctk.CTkButton(
+            frame_btns,
+            text="Cancelar",
+            width=120,
+            fg_color="transparent",
+            border_width=1,
+            command=dialogo.destroy,
+        ).pack(side="left", padx=10)
+
+        def _eliminar() -> None:
+            producto_repo.eliminar(producto.id)
+            dialogo.destroy()
+            self._cargar_lista()
+
+        ctk.CTkButton(
+            frame_btns,
+            text="Eliminar",
+            width=120,
+            fg_color="#C0392B",
+            hover_color="#922B21",
+            command=_eliminar,
+        ).pack(side="left", padx=10)
+
     def _mostrar_mensaje(self, texto: str, *, error: bool) -> None:
         color = "#FF5555" if error else "#2ECC71"
         self._label_mensaje.configure(text=texto, text_color=color)

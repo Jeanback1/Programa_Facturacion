@@ -33,5 +33,12 @@ def crear(nombre: str, precio: float) -> Producto:
     return Producto(id=cursor.lastrowid, nombre=nombre, precio=precio)
 
 
+def eliminar(id: int) -> None:
+    """Elimina el producto con el id dado."""
+    conn = get_connection()
+    conn.execute("DELETE FROM productos WHERE id = ?", (id,))
+    conn.commit()
+
+
 def _fila_a_producto(fila) -> Producto:
     return Producto(id=fila["id"], nombre=fila["nombre"], precio=float(fila["precio"]))
