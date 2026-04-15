@@ -208,14 +208,16 @@ class FacturarView(ctk.CTkFrame):
         ctk.CTkButton(
             frame_botones,
             text="Imprimir",
-            font=ctk.CTkFont(size=13, weight="bold"),
+            font=ctk.CTkFont(size=15, weight="bold"),
+            height=44,
             command=self.imprimir_factura,
         ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
 
         ctk.CTkButton(
             frame_botones,
             text="Eliminar",
-            font=ctk.CTkFont(size=13, weight="bold"),
+            font=ctk.CTkFont(size=15, weight="bold"),
+            height=44,
             fg_color="#C0392B",
             hover_color="#922B21",
             command=self._limpiar_factura,
@@ -576,18 +578,18 @@ class FacturarView(ctk.CTkFrame):
     # ── Resize del catálogo ─────────────────────────────────────────────────────
 
     def _aumentar_catalogo(self) -> None:
-        if self._card_width >= 220:
+        if self._card_width >= 400:
             return
-        self._card_width = min(220, self._card_width + 20)
+        self._card_width = min(400, self._card_width + 20)
         self._card_height = round(self._card_width * 100 / 150)
         self._num_columnas = 0  # fuerza re-render en _reflow_grid
         w = self._frame_catalogo._parent_canvas.winfo_width()
         self._reflow_grid(w if w > 1 else 600)
 
     def _reducir_catalogo(self) -> None:
-        if self._card_width <= 100:
+        if self._card_width <= 80:
             return
-        self._card_width = max(100, self._card_width - 20)
+        self._card_width = max(80, self._card_width - 20)
         self._card_height = round(self._card_width * 100 / 150)
         self._num_columnas = 0
         w = self._frame_catalogo._parent_canvas.winfo_width()
@@ -596,9 +598,9 @@ class FacturarView(ctk.CTkFrame):
     # ── Resize de la factura ────────────────────────────────────────────────────
 
     def _aumentar_factura(self) -> None:
-        if self._item_font_size >= 20:
+        if self._item_font_size >= 36:
             return
-        self._item_font_size = min(20, self._item_font_size + 2)
+        self._item_font_size = min(36, self._item_font_size + 2)
         self._item_height = round(50 * self._item_font_size / 14)
         self._reconstruir_items_factura()
 
