@@ -369,6 +369,7 @@ class FacturarView(ctk.CTkFrame):
             item_frame.grid_columnconfigure(1, weight=0)  # Botón +
             item_frame.grid_columnconfigure(2, weight=1)  # Nombre
             item_frame.grid_columnconfigure(3, weight=0)  # Precio
+            item_frame.grid_columnconfigure(4, weight=0)  # Botón ×
 
             lbl_cantidad = ctk.CTkLabel(
                 item_frame,
@@ -405,6 +406,17 @@ class FacturarView(ctk.CTkFrame):
             )
             lbl_precio.grid(row=0, column=3, padx=8, pady=4, sticky="e")
 
+            ctk.CTkButton(
+                item_frame,
+                text="×",
+                width=int(24 * fs / 14),
+                height=int(24 * fs / 14),
+                font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
+                fg_color="#C0392B",
+                hover_color="#922B21",
+                command=lambda p=pid: self._eliminar_item(p),
+            ).grid(row=0, column=4, padx=(4, 8), pady=4)
+
             self._items[pid] = {
                 "nombre": producto.nombre,
                 "precio_unitario": producto.precio,
@@ -416,6 +428,25 @@ class FacturarView(ctk.CTkFrame):
 
         self._total += producto.precio
         self._label_total.configure(text=f"${self._total:,.0f}")
+
+    def _eliminar_item(self, pid: int) -> None:
+        """Elimina un ítem de la factura y actualiza el total."""
+        item = self._items.pop(pid)
+        self._total -= item["precio_unitario"] * item["cantidad"]
+        item["label"].destroy()
+
+        if not self._items:
+            self._total = 0.0
+            self._label_total.configure(text="$0")
+            self._placeholder_factura = ctk.CTkLabel(
+                self._frame_factura,
+                text="Sin productos aún",
+                text_color="gray",
+                font=ctk.CTkFont(size=13),
+            )
+            self._placeholder_factura.pack(pady=24)
+        else:
+            self._label_total.configure(text=f"${self._total:,.0f}")
 
     def _abrir_popup_cantidad(self, pid: int) -> None:
         """Abre un popup para editar la cantidad de un ítem (soporta decimales)."""
@@ -536,11 +567,76 @@ class FacturarView(ctk.CTkFrame):
                 detalle=detalle,
             )
             self._label_total.configure(text="Impresa ✓", text_color="#2ECC71")
+            self._preguntar_copia(factura, items_snapshot, config, usuario.nombre, detalle)
         except Exception as exc:
             self._label_total.configure(text="Guardada (sin imprimir)", text_color="#F39C12")
             self._mostrar_error_impresion(str(exc))
 
         self.after(2500, lambda: self._label_total.configure(text="$0", text_color="#2ECC71"))
+
+    def _preguntar_copia(
+        self,
+        factura: object,
+        items: dict,
+        config: dict,
+        nombre_cajera: str,
+        detalle: str | None,
+    ) -> None:
+        """Muestra un popup preguntando si se desea imprimir una copia."""
+        raiz = self.winfo_toplevel()
+        popup = ctk.CTkToplevel(raiz)
+        popup.title("Imprimir copia")
+        popup.resizable(False, False)
+        popup.transient(raiz)
+
+        ancho, alto = 320, 150
+        raiz.update_idletasks()
+        x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
+        popup.geometry(f"{ancho}x{alto}+{x}+{y}")
+        popup.after(50, popup.grab_set)
+
+        ctk.CTkLabel(
+            popup,
+            text="¿Desea imprimir una copia?",
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(pady=(24, 16), padx=16)
+
+        frame_btns = ctk.CTkFrame(popup, fg_color="transparent")
+        frame_btns.pack()
+
+        def _imprimir_copia() -> None:
+            popup.destroy()
+            try:
+                impresora.imprimir_recibo(
+                    factura=factura,
+                    items=items,
+                    config=config,
+                    nombre_cajera=nombre_cajera,
+                    detalle=detalle,
+                    es_copia=True,
+                )
+            except Exception as exc:
+                self._mostrar_error_impresion(str(exc))
+
+        ctk.CTkButton(
+            frame_btns,
+            text="Sí",
+            width=100,
+            command=_imprimir_copia,
+        ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(
+            frame_btns,
+            text="No",
+            width=100,
+            fg_color="transparent",
+            border_width=1,
+            command=popup.destroy,
+        ).pack(side="left")
+
+        popup.bind("<Return>", lambda _e: _imprimir_copia())
+        popup.bind("<Escape>", lambda _e: popup.destroy())
 
     def _mostrar_error_impresion(self, mensaje: str) -> None:
         """Muestra un popup con el error de impresión."""
@@ -644,6 +740,7 @@ class FacturarView(ctk.CTkFrame):
             item_frame.grid_columnconfigure(1, weight=0)
             item_frame.grid_columnconfigure(2, weight=1)
             item_frame.grid_columnconfigure(3, weight=0)
+            item_frame.grid_columnconfigure(4, weight=0)  # Botón ×
 
             lbl_cantidad = ctk.CTkLabel(
                 item_frame,
@@ -679,6 +776,17 @@ class FacturarView(ctk.CTkFrame):
                 anchor="e",
             )
             lbl_precio.grid(row=0, column=3, padx=8, pady=4, sticky="e")
+
+            ctk.CTkButton(
+                item_frame,
+                text="×",
+                width=int(24 * fs / 14),
+                height=int(24 * fs / 14),
+                font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
+                fg_color="#C0392B",
+                hover_color="#922B21",
+                command=lambda p=pid: self._eliminar_item(p),
+            ).grid(row=0, column=4, padx=(4, 8), pady=4)
 
             item["label"] = item_frame
             item["lbl_cantidad"] = lbl_cantidad
