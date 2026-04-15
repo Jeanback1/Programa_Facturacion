@@ -10,10 +10,6 @@ from app.printing import impresora
 from app.repositories import configuracion_repo, factura_item_repo, factura_repo, producto_repo
 from app.session import Session
 
-_CARD_WIDTH: int = 150
-_CARD_HEIGHT: int = 100
-_CARD_GAP: int = 8
-
 
 class FacturarView(ctk.CTkFrame):
     """Frame de facturación con catálogo de productos y lista de la factura actual."""
@@ -33,6 +29,15 @@ class FacturarView(ctk.CTkFrame):
 
         # Productos cargados desde la BD (se usan para filtrar en búsqueda)
         self._todos_productos: list[Producto] = producto_repo.listar_todos()
+
+        # Tamaños ajustables del catálogo
+        self._card_width: int = 150
+        self._card_height: int = 100
+        self._card_gap: int = 8
+
+        # Tamaños ajustables de los ítems de la factura
+        self._item_height: int = 50
+        self._item_font_size: int = 14
 
         # Estado de la cuadrícula del catálogo
         self._productos_actuales: list[Producto] = []
@@ -85,15 +90,42 @@ class FacturarView(ctk.CTkFrame):
         # ── Columna izquierda — Catálogo ────────────────────────────
         col_izquierda = ctk.CTkFrame(area_columnas, fg_color="transparent")
         col_izquierda.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        col_izquierda.grid_rowconfigure(0, weight=1)
+        col_izquierda.grid_rowconfigure(0, weight=0)
+        col_izquierda.grid_rowconfigure(1, weight=1)
         col_izquierda.grid_columnconfigure(0, weight=1)
 
-        self._frame_catalogo = ctk.CTkScrollableFrame(
-            col_izquierda,
-            label_text="Catálogo",
-            label_font=ctk.CTkFont(size=13, weight="bold"),
-        )
-        self._frame_catalogo.grid(row=0, column=0, sticky="nsew")
+        header_cat = ctk.CTkFrame(col_izquierda, height=32, fg_color="transparent")
+        header_cat.grid(row=0, column=0, sticky="ew", pady=(0, 2))
+        header_cat.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            header_cat,
+            text="Catálogo",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=0, column=0, padx=(4, 0), sticky="w")
+
+        ctk.CTkButton(
+            header_cat,
+            text="−",
+            width=24, height=24,
+            fg_color="transparent",
+            border_width=1,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._reducir_catalogo,
+        ).grid(row=0, column=2, padx=(0, 2))
+
+        ctk.CTkButton(
+            header_cat,
+            text="+",
+            width=24, height=24,
+            fg_color="transparent",
+            border_width=1,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._aumentar_catalogo,
+        ).grid(row=0, column=3, padx=(0, 4))
+
+        self._frame_catalogo = ctk.CTkScrollableFrame(col_izquierda)
+        self._frame_catalogo.grid(row=1, column=0, sticky="nsew")
         self._frame_catalogo._parent_canvas.bind(
             "<Configure>",
             self._on_catalogo_resize,
@@ -103,15 +135,42 @@ class FacturarView(ctk.CTkFrame):
         # ── Columna derecha — Lista de la factura ───────────────────
         col_derecha = ctk.CTkFrame(area_columnas)
         col_derecha.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        col_derecha.grid_rowconfigure(0, weight=1)
+        col_derecha.grid_rowconfigure(0, weight=0)
+        col_derecha.grid_rowconfigure(1, weight=1)
         col_derecha.grid_columnconfigure(0, weight=1)
 
-        self._frame_factura = ctk.CTkScrollableFrame(
-            col_derecha,
-            label_text="Factura actual",
-            label_font=ctk.CTkFont(size=13, weight="bold"),
-        )
-        self._frame_factura.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8, 4))
+        header_fac = ctk.CTkFrame(col_derecha, height=32, fg_color="transparent")
+        header_fac.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 2))
+        header_fac.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            header_fac,
+            text="Factura actual",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=0, column=0, padx=(4, 0), sticky="w")
+
+        ctk.CTkButton(
+            header_fac,
+            text="−",
+            width=24, height=24,
+            fg_color="transparent",
+            border_width=1,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._reducir_factura,
+        ).grid(row=0, column=2, padx=(0, 2))
+
+        ctk.CTkButton(
+            header_fac,
+            text="+",
+            width=24, height=24,
+            fg_color="transparent",
+            border_width=1,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._aumentar_factura,
+        ).grid(row=0, column=3, padx=(0, 4))
+
+        self._frame_factura = ctk.CTkScrollableFrame(col_derecha)
+        self._frame_factura.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 4))
 
         # Placeholder visible cuando la factura está vacía
         self._placeholder_factura = ctk.CTkLabel(
@@ -124,7 +183,7 @@ class FacturarView(ctk.CTkFrame):
 
         # ── Total ───────────────────────────────────────────────────
         frame_total = ctk.CTkFrame(col_derecha, fg_color="transparent")
-        frame_total.grid(row=1, column=0, sticky="ew", padx=8, pady=(2, 2))
+        frame_total.grid(row=2, column=0, sticky="ew", padx=8, pady=(2, 2))
 
         ctk.CTkLabel(
             frame_total,
@@ -142,7 +201,7 @@ class FacturarView(ctk.CTkFrame):
 
         # ── Botones inferiores ──────────────────────────────────────
         frame_botones = ctk.CTkFrame(col_derecha, fg_color="transparent")
-        frame_botones.grid(row=2, column=0, sticky="ew", padx=8, pady=(0, 10))
+        frame_botones.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 10))
         frame_botones.grid_columnconfigure(0, weight=1)
         frame_botones.grid_columnconfigure(1, weight=1)
 
@@ -164,7 +223,7 @@ class FacturarView(ctk.CTkFrame):
 
         # ── Detalle de la factura ───────────────────────────────────
         frame_detalle = ctk.CTkFrame(col_derecha, fg_color="transparent")
-        frame_detalle.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 8))
+        frame_detalle.grid(row=4, column=0, sticky="ew", padx=8, pady=(0, 8))
 
         ctk.CTkLabel(
             frame_detalle,
@@ -190,7 +249,7 @@ class FacturarView(ctk.CTkFrame):
     def _reflow_grid(self, canvas_width: int) -> None:
         """Recalcula columnas y re-renderiza el catálogo si el número cambió."""
         self._reflow_job = None
-        cols = max(1, canvas_width // (_CARD_WIDTH + _CARD_GAP))
+        cols = max(1, canvas_width // (self._card_width + self._card_gap))
         if cols != self._num_columnas:
             self._num_columnas = cols
             self._renderizar_catalogo(self._productos_actuales)
@@ -217,24 +276,25 @@ class FacturarView(ctk.CTkFrame):
         for c in range(cols, cols + 10):
             self._frame_catalogo.grid_columnconfigure(c, weight=0, minsize=0)
         for c in range(cols):
-            self._frame_catalogo.grid_columnconfigure(c, weight=1, minsize=_CARD_WIDTH)
+            self._frame_catalogo.grid_columnconfigure(c, weight=1, minsize=self._card_width)
 
         for idx, producto in enumerate(productos):
             self._crear_tarjeta_producto(producto, row=idx // cols, col=idx % cols)
 
     def _crear_tarjeta_producto(self, producto: Producto, *, row: int, col: int) -> None:
         """Crea una tarjeta de producto cuadrada en la posición (row, col) del grid."""
+        font_size = max(9, round(12 * self._card_width / 150))
         tarjeta = ctk.CTkFrame(
             self._frame_catalogo,
-            width=_CARD_WIDTH,
-            height=_CARD_HEIGHT,
+            width=self._card_width,
+            height=self._card_height,
             corner_radius=8,
             border_width=2,
             border_color='#555555'
         )
         tarjeta.grid(
             row=row, column=col,
-            padx=_CARD_GAP // 2, pady=_CARD_GAP // 2,
+            padx=self._card_gap // 2, pady=self._card_gap // 2,
             sticky="n",
         )
         tarjeta.grid_propagate(False)
@@ -246,9 +306,9 @@ class FacturarView(ctk.CTkFrame):
         ctk.CTkLabel(
             tarjeta,
             text=f"#{producto.id} - {producto.nombre}",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=font_size, weight="bold"),
             text_color="white",
-            wraplength=_CARD_WIDTH - 16,
+            wraplength=self._card_width - 16,
             anchor="center",
             justify="center",
         ).grid(row=0, column=0, padx=8, pady=(10, 4), sticky="nsew")
@@ -256,9 +316,9 @@ class FacturarView(ctk.CTkFrame):
         ctk.CTkButton(
             tarjeta,
             text="Agregar",
-            width=_CARD_WIDTH - 24,
+            width=self._card_width - 24,
             height=30,
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=font_size),
             command=lambda p=producto: self._agregar_a_factura(p),
         ).grid(row=1, column=0, padx=12, pady=(0, 10))
 
@@ -292,9 +352,10 @@ class FacturarView(ctk.CTkFrame):
             if not self._items:
                 self._placeholder_factura.pack_forget()
 
+            fs = self._item_font_size
             item_frame = ctk.CTkFrame(
                 self._frame_factura,
-                height=50,
+                height=self._item_height,
                 border_width=1,
                 border_color="#555555",
                 corner_radius=6
@@ -310,17 +371,17 @@ class FacturarView(ctk.CTkFrame):
             lbl_cantidad = ctk.CTkLabel(
                 item_frame,
                 text="1",
-                font=ctk.CTkFont(size=14, weight="bold"),
-                width=40,
+                font=ctk.CTkFont(size=fs, weight="bold"),
+                width=int(40 * fs / 14),
             )
             lbl_cantidad.grid(row=0, column=0, padx=(8, 0), pady=4, sticky="w")
 
             ctk.CTkButton(
                 item_frame,
                 text="+",
-                width=24,
-                height=24,
-                font=ctk.CTkFont(size=12, weight="bold"),
+                width=int(24 * fs / 14),
+                height=int(24 * fs / 14),
+                font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
                 fg_color="transparent",
                 border_width=1,
                 command=lambda p=pid: self._abrir_popup_cantidad(p),
@@ -329,15 +390,15 @@ class FacturarView(ctk.CTkFrame):
             ctk.CTkLabel(
                 item_frame,
                 text=producto.nombre,
-                font=ctk.CTkFont(size=14),
+                font=ctk.CTkFont(size=fs),
                 anchor="w",
             ).grid(row=0, column=2, padx=4, pady=4, sticky="ew")
 
             lbl_precio = ctk.CTkLabel(
                 item_frame,
                 text=f"${producto.precio:,.0f}",
-                font=ctk.CTkFont(size=14, weight="bold"),
-                width=80,
+                font=ctk.CTkFont(size=fs, weight="bold"),
+                width=int(80 * fs / 14),
                 anchor="e",
             )
             lbl_precio.grid(row=0, column=3, padx=8, pady=4, sticky="e")
@@ -511,6 +572,115 @@ class FacturarView(ctk.CTkFrame):
 
         ctk.CTkButton(popup, text="Cerrar", width=100, command=popup.destroy).pack(pady=(0, 16))
         popup.bind("<Return>", lambda _e: popup.destroy())
+
+    # ── Resize del catálogo ─────────────────────────────────────────────────────
+
+    def _aumentar_catalogo(self) -> None:
+        if self._card_width >= 220:
+            return
+        self._card_width = min(220, self._card_width + 20)
+        self._card_height = round(self._card_width * 100 / 150)
+        self._num_columnas = 0  # fuerza re-render en _reflow_grid
+        w = self._frame_catalogo._parent_canvas.winfo_width()
+        self._reflow_grid(w if w > 1 else 600)
+
+    def _reducir_catalogo(self) -> None:
+        if self._card_width <= 100:
+            return
+        self._card_width = max(100, self._card_width - 20)
+        self._card_height = round(self._card_width * 100 / 150)
+        self._num_columnas = 0
+        w = self._frame_catalogo._parent_canvas.winfo_width()
+        self._reflow_grid(w if w > 1 else 600)
+
+    # ── Resize de la factura ────────────────────────────────────────────────────
+
+    def _aumentar_factura(self) -> None:
+        if self._item_font_size >= 20:
+            return
+        self._item_font_size = min(20, self._item_font_size + 2)
+        self._item_height = round(50 * self._item_font_size / 14)
+        self._reconstruir_items_factura()
+
+    def _reducir_factura(self) -> None:
+        if self._item_font_size <= 10:
+            return
+        self._item_font_size = max(10, self._item_font_size - 2)
+        self._item_height = round(50 * self._item_font_size / 14)
+        self._reconstruir_items_factura()
+
+    def _reconstruir_items_factura(self) -> None:
+        """Destruye y recrea los ítems de la factura con el tamaño actual."""
+        for widget in self._frame_factura.winfo_children():
+            widget.destroy()
+
+        if not self._items:
+            self._placeholder_factura = ctk.CTkLabel(
+                self._frame_factura,
+                text="Sin productos aún",
+                text_color="gray",
+                font=ctk.CTkFont(size=13),
+            )
+            self._placeholder_factura.pack(pady=24)
+            return
+
+        fs = self._item_font_size
+        ih = self._item_height
+
+        for pid, item in self._items.items():
+            item_frame = ctk.CTkFrame(
+                self._frame_factura,
+                height=ih,
+                border_width=1,
+                border_color="#555555",
+                corner_radius=6,
+            )
+            item_frame.pack(fill="x", padx=8, pady=4)
+            item_frame.pack_propagate(False)
+
+            item_frame.grid_columnconfigure(0, weight=0)
+            item_frame.grid_columnconfigure(1, weight=0)
+            item_frame.grid_columnconfigure(2, weight=1)
+            item_frame.grid_columnconfigure(3, weight=0)
+
+            lbl_cantidad = ctk.CTkLabel(
+                item_frame,
+                text=f"{item['cantidad']:g}",
+                font=ctk.CTkFont(size=fs, weight="bold"),
+                width=int(40 * fs / 14),
+            )
+            lbl_cantidad.grid(row=0, column=0, padx=(8, 0), pady=4, sticky="w")
+
+            ctk.CTkButton(
+                item_frame,
+                text="+",
+                width=int(24 * fs / 14),
+                height=int(24 * fs / 14),
+                font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
+                fg_color="transparent",
+                border_width=1,
+                command=lambda p=pid: self._abrir_popup_cantidad(p),
+            ).grid(row=0, column=1, padx=4, pady=4)
+
+            ctk.CTkLabel(
+                item_frame,
+                text=item["nombre"],
+                font=ctk.CTkFont(size=fs),
+                anchor="w",
+            ).grid(row=0, column=2, padx=4, pady=4, sticky="ew")
+
+            lbl_precio = ctk.CTkLabel(
+                item_frame,
+                text=f"${item['precio_unitario'] * item['cantidad']:,.0f}",
+                font=ctk.CTkFont(size=fs, weight="bold"),
+                width=int(80 * fs / 14),
+                anchor="e",
+            )
+            lbl_precio.grid(row=0, column=3, padx=8, pady=4, sticky="e")
+
+            item["label"] = item_frame
+            item["lbl_cantidad"] = lbl_cantidad
+            item["lbl_precio"] = lbl_precio
 
     def _volver_a_home(self) -> None:
         """Regresa a la pantalla principal."""
