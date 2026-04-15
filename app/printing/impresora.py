@@ -26,11 +26,14 @@ def imprimir_recibo(
             "Configure el nombre en Configuración → Impresora."
         )
 
-    with Win32Raw(nombre_impresora) as p:
+    p = Win32Raw(nombre_impresora)
+    try:
         _imprimir_encabezado(p, config)
         _imprimir_cuerpo(p, factura, items, nombre_cajera, detalle)
         _imprimir_pie(p, config)
         p.cut()
+    finally:
+        p.close()
 
 
 # ── Secciones del recibo ───────────────────────────────────────────────────────
