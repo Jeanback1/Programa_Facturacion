@@ -358,16 +358,18 @@ class CuadreView(ctk.CTkFrame):
         if not self._facturas:
             return
 
-        total = sum(f.total for f in self._facturas)
+        facturas_cuadradas = list(self._facturas)
+        total = sum(f.total for f in facturas_cuadradas)
         conn = get_connection()
         try:
             cur = conn.execute(
                 "INSERT INTO cuadres (usuario_id, total_cuadre) VALUES (?, ?)",
                 (self._usuario_id, total),
             )
+            cuadre_id_nuevo = cur.lastrowid
             conn.execute(
                 "UPDATE facturas SET cuadre_id = ? WHERE cuadre_id IS NULL AND usuario_id = ?",
-                (cur.lastrowid, self._usuario_id),
+                (cuadre_id_nuevo, self._usuario_id),
             )
             conn.commit()
         except Exception:
@@ -382,3 +384,24 @@ class CuadreView(ctk.CTkFrame):
             return
 
         self._cargar_datos()
+
+        try:
+            from datetime import datetime
+
+            from app.printing.impresora import imprimir_cuadre
+            from app.repositories import configuracion_repo
+
+            config = configuracion_repo.get_all()
+            nombre_cajera = Session().usuario_actual.nombre
+            hora_cuadre = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            imprimir_cuadre(
+                facturas_cuadradas,
+                cuadre_id_nuevo,
+                hora_cuadre,
+                nombre_cajera,
+                config,
+                total,
+            )
+        except RuntimeError:
+            pass  # impresora no configurada o inaccesible — el cuadre ya fue guardado

@@ -136,3 +136,90 @@ def _imprimir_pie(p, config: dict[str, str]) -> None:
     p.set(align="center")
     p.text(pie + "\n\n")
     p.set(align="left")
+
+
+# ── Reporte de cuadre ─────────────────────────────────────────────────────────
+
+def imprimir_cuadre(
+    facturas: list,
+    cuadre_id: int,
+    hora_cuadre: str,
+    nombre_cajera: str,
+    config: dict[str, str],
+    total: float,
+) -> None:
+    """Imprime el reporte de cuadre en la impresora térmica configurada.
+
+    Raises RuntimeError si la impresora no está configurada o no es accesible.
+    """
+    from escpos.printer import Win32Raw
+
+    nombre_impresora = config.get("impresora_nombre", "").strip()
+    if not nombre_impresora:
+        raise RuntimeError(
+            "No hay impresora configurada. "
+            "Configure el nombre en Configuración → Impresora."
+        )
+
+    p = Win32Raw(nombre_impresora)
+    try:
+        _imprimir_encabezado(p, config)
+        _imprimir_cuerpo_cuadre(p, facturas, cuadre_id, hora_cuadre, nombre_cajera, total)
+        _imprimir_pie(p, config)
+        p.cut()
+    finally:
+        p.close()
+
+
+def _imprimir_cuerpo_cuadre(
+    p,
+    facturas: list,
+    cuadre_id: int,
+    hora_cuadre: str,
+    nombre_cajera: str,
+    total: float,
+) -> None:
+    """Título, datos del cuadre, lista de facturas y total."""
+    p.set(align="left")
+    p.text("-" * _LINE_WIDTH + "\n")
+    p.set(align="center", bold=True)
+    p.text("REPORTE DE CUADRE\n")
+    p.set(align="left", bold=False)
+    p.text("-" * _LINE_WIDTH + "\n")
+
+    ts = hora_cuadre[:16].replace("T", " ")
+    fecha, hora_str = ts[:10], ts[11:16]
+    p.text(f"Cuadre No.:   {cuadre_id}\n")
+    p.text(f"Cajera:       {nombre_cajera}\n")
+    p.text(f"Fecha:        {fecha}   {hora_str}\n")
+    p.text("\n")
+
+    # ── Encabezado de tabla ────────────────────────────────────────────────────
+    p.text("-" * _LINE_WIDTH + "\n")
+    col_id = 8    # "#NNN    "
+    col_hora = 7  # "HH:MM  "
+    col_total = _LINE_WIDTH - col_id - col_hora
+    encabezado = f"{'#Fact':<{col_id}}{'Hora':<{col_hora}}{'Total':>{col_total}}"
+    p.text(encabezado + "\n")
+    p.text("-" * _LINE_WIDTH + "\n")
+
+    # ── Filas de facturas ──────────────────────────────────────────────────────
+    for factura in facturas:
+        hora_fact = factura.hora_facturacion[11:16]
+        total_str = f"${factura.total:,.0f}"
+        id_str = f"#{factura.id}"
+        fila = f"{id_str:<{col_id}}{hora_fact:<{col_hora}}{total_str:>{col_total}}"
+        p.text(fila + "\n")
+
+    p.text("\n")
+
+    # ── Resumen ────────────────────────────────────────────────────────────────
+    p.text("-" * _LINE_WIDTH + "\n")
+    n = len(facturas)
+    p.text(f"  {n} factura{'s' if n != 1 else ''}\n")
+    total_str = f"${total:,.0f}"
+    espacio = _LINE_WIDTH - len(total_str)
+    p.set(bold=True)
+    p.text(f"{'TOTAL:':<{espacio}}{total_str}\n")
+    p.set(bold=False)
+    p.text("\n")
