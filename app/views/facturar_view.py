@@ -449,16 +449,16 @@ class FacturarView(ctk.CTkFrame):
             self._label_total.configure(text=f"${self._total:,.0f}")
 
     def _abrir_popup_cantidad(self, pid: int) -> None:
-        """Abre un popup para editar la cantidad de un ítem (soporta decimales)."""
+        """Abre un popup para editar la cantidad y el precio unitario de un ítem."""
         item = self._items[pid]
         raiz = self.winfo_toplevel()
 
         popup = ctk.CTkToplevel(raiz)
-        popup.title("Editar cantidad")
+        popup.title("Editar cantidad y precio")
         popup.resizable(False, False)
         popup.transient(raiz)
 
-        ancho, alto = 300, 170
+        ancho, alto = 300, 230
         raiz.update_idletasks()
         x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
         y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
@@ -467,41 +467,62 @@ class FacturarView(ctk.CTkFrame):
 
         ctk.CTkLabel(
             popup,
-            text=f"Cantidad — {item['nombre']}",
+            text=item["nombre"],
             font=ctk.CTkFont(size=13, weight="bold"),
             wraplength=260,
         ).pack(pady=(16, 6), padx=16)
 
-        entry = ctk.CTkEntry(popup, width=200)
-        entry.insert(0, f"{item['cantidad']:g}")
-        entry.pack(pady=4, padx=16)
-        entry.focus()
+        ctk.CTkLabel(popup, text="Cantidad:", font=ctk.CTkFont(size=12), anchor="w").pack(
+            padx=16, fill="x"
+        )
+        entry_cantidad = ctk.CTkEntry(popup, width=200)
+        entry_cantidad.insert(0, f"{item['cantidad']:g}")
+        entry_cantidad.pack(pady=(2, 6), padx=16)
+        entry_cantidad.focus()
+
+        ctk.CTkLabel(popup, text="Precio unitario:", font=ctk.CTkFont(size=12), anchor="w").pack(
+            padx=16, fill="x"
+        )
+        entry_precio = ctk.CTkEntry(popup, width=200)
+        entry_precio.insert(0, f"{item['precio_unitario']:,.0f}")
+        entry_precio.pack(pady=(2, 4), padx=16)
 
         lbl_error = ctk.CTkLabel(popup, text="", text_color="#FF5555", font=ctk.CTkFont(size=11))
         lbl_error.pack()
 
         def _confirmar() -> None:
             try:
-                nueva = float(entry.get().replace(",", "."))
+                nueva_cantidad = float(entry_cantidad.get().replace(",", "."))
             except ValueError:
-                lbl_error.configure(text="Valor inválido")
+                lbl_error.configure(text="Cantidad inválida")
                 return
-            if nueva <= 0:
-                lbl_error.configure(text="Debe ser mayor a 0")
+            if nueva_cantidad <= 0:
+                lbl_error.configure(text="La cantidad debe ser mayor a 0")
+                return
+
+            try:
+                nuevo_precio = float(entry_precio.get().replace(",", "."))
+            except ValueError:
+                lbl_error.configure(text="Precio inválido")
+                return
+            if nuevo_precio <= 0:
+                lbl_error.configure(text="El precio debe ser mayor a 0")
                 return
 
             anterior_subtotal = item["precio_unitario"] * item["cantidad"]
             self._total -= anterior_subtotal
-            item["cantidad"] = nueva
-            nuevo_subtotal = item["precio_unitario"] * nueva
+
+            item["cantidad"] = nueva_cantidad
+            item["precio_unitario"] = nuevo_precio
+            nuevo_subtotal = nuevo_precio * nueva_cantidad
             self._total += nuevo_subtotal
 
-            item["lbl_cantidad"].configure(text=f"{nueva:g}")
+            item["lbl_cantidad"].configure(text=f"{nueva_cantidad:g}")
             item["lbl_precio"].configure(text=f"${nuevo_subtotal:,.0f}")
             self._label_total.configure(text=f"${self._total:,.0f}")
             popup.destroy()
 
-        ctk.CTkButton(popup, text="Aceptar", width=120, command=_confirmar).pack(pady=(6, 16))
+        ctk.CTkButton(popup, text="Aceptar", width=120, command=_confirmar).pack(pady=(4, 16))
         popup.bind("<Return>", lambda _e: _confirmar())
 
     def _limpiar_factura(self) -> None:
