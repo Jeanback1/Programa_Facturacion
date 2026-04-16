@@ -12,6 +12,7 @@ def imprimir_recibo(
     config: dict[str, str],
     nombre_cajera: str,
     detalle: str | None = None,
+    direccion: str | None = None,
     es_copia: bool = False,
 ) -> None:
     """Envía el recibo a la impresora térmica configurada en Windows.
@@ -30,7 +31,7 @@ def imprimir_recibo(
     p = Win32Raw(nombre_impresora)
     try:
         _imprimir_encabezado(p, config)
-        _imprimir_cuerpo(p, factura, items, nombre_cajera, detalle, es_copia=es_copia)
+        _imprimir_cuerpo(p, factura, items, nombre_cajera, detalle, direccion, es_copia=es_copia)
         _imprimir_pie(p, config)
         p.cut()
     finally:
@@ -63,6 +64,7 @@ def _imprimir_cuerpo(
     items: dict,
     nombre_cajera: str,
     detalle: str | None,
+    direccion: str | None = None,
     es_copia: bool = False,
 ) -> None:
     """Número de factura, cajera, líneas de productos, total y nota."""
@@ -76,6 +78,8 @@ def _imprimir_cuerpo(
     p.text(f"No. Factura:  {factura.id}\n")
     p.text(f"Cajera:       {nombre_cajera}\n")
     p.text(f"Fecha:        {fecha}   {hora_str}\n")
+    if direccion:
+        p.text(f"Dirección:    {direccion}"[:_LINE_WIDTH] + "\n")
     p.text("\n")
 
     # ── Separador IMPRESION ────────────────────────────────────────────────────

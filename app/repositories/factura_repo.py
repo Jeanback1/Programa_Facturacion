@@ -8,13 +8,18 @@ from app.database.connection import get_connection
 from app.models.factura import Factura
 
 
-def crear(total: float, usuario_id: int, detalle: Optional[str] = None) -> Factura:
+def crear(
+    total: float,
+    usuario_id: int,
+    detalle: Optional[str] = None,
+    direccion: Optional[str] = None,
+) -> Factura:
     """Inserta una nueva factura (sin cuadre) y retorna el objeto creado."""
     conn = get_connection()
     try:
         cursor = conn.execute(
-            "INSERT INTO facturas (total, usuario_id, detalle) VALUES (?, ?, ?)",
-            (total, usuario_id, detalle),
+            "INSERT INTO facturas (total, usuario_id, detalle, direccion) VALUES (?, ?, ?, ?)",
+            (total, usuario_id, detalle, direccion),
         )
         conn.commit()
         factura = _buscar_por_id(cursor.lastrowid, conn)
@@ -59,4 +64,5 @@ def _fila_a_factura(fila: sqlite3.Row) -> Factura:
         usuario_id=fila["usuario_id"],
         cuadre_id=fila["cuadre_id"],
         detalle=fila["detalle"],
+        direccion=fila["direccion"],
     )

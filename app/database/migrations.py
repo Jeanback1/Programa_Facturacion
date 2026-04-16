@@ -25,6 +25,8 @@ def run_migrations() -> None:
         columnas = {fila[1] for fila in conn.execute("PRAGMA table_info(facturas)")}
         if "detalle" not in columnas:
             conn.execute("ALTER TABLE facturas ADD COLUMN detalle TEXT")
+        if "direccion" not in columnas:
+            conn.execute("ALTER TABLE facturas ADD COLUMN direccion TEXT")
         conn.commit()
     except Exception as e:
         conn.rollback()

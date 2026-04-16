@@ -15,3 +15,4 @@ class Factura:
     usuario_id: int
     cuadre_id: Optional[int] # None = no cuadrada aún
     detalle: Optional[str] = None
+    direccion: Optional[str] = None

@@ -223,9 +223,26 @@ class FacturarView(ctk.CTkFrame):
             command=self._limpiar_factura,
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
 
+        # ── Dirección del cliente ───────────────────────────────────
+        frame_direccion = ctk.CTkFrame(col_derecha, fg_color="transparent")
+        frame_direccion.grid(row=4, column=0, sticky="ew", padx=8, pady=(0, 8))
+
+        ctk.CTkLabel(
+            frame_direccion,
+            text="Dirección:",
+            font=ctk.CTkFont(size=13),
+        ).pack(anchor="w", padx=4)
+
+        self._entry_direccion = ctk.CTkEntry(
+            frame_direccion,
+            placeholder_text="Dirección del cliente...",
+            height=36,
+        )
+        self._entry_direccion.pack(fill="x", padx=4)
+
         # ── Detalle de la factura ───────────────────────────────────
         frame_detalle = ctk.CTkFrame(col_derecha, fg_color="transparent")
-        frame_detalle.grid(row=4, column=0, sticky="ew", padx=8, pady=(0, 8))
+        frame_detalle.grid(row=5, column=0, sticky="ew", padx=8, pady=(0, 8))
 
         ctk.CTkLabel(
             frame_detalle,
@@ -512,6 +529,7 @@ class FacturarView(ctk.CTkFrame):
         self._items.clear()
         self._total = 0.0
         self._label_total.configure(text="$0")
+        self._entry_direccion.delete(0, "end")
         self._entry_detalle.delete(0, "end")
 
         # Restaurar el placeholder
@@ -538,11 +556,12 @@ class FacturarView(ctk.CTkFrame):
 
         usuario = Session().usuario_actual
         detalle = self._entry_detalle.get().strip() or None
+        direccion = self._entry_direccion.get().strip() or None
         items_snapshot = dict(self._items)  # captura antes de limpiar
 
         try:
             factura = factura_repo.crear(
-                total=self._total, usuario_id=usuario.id, detalle=detalle
+                total=self._total, usuario_id=usuario.id, detalle=detalle, direccion=direccion
             )
             factura_item_repo.crear_items(factura.id, items_snapshot)
         except RuntimeError:
@@ -565,9 +584,10 @@ class FacturarView(ctk.CTkFrame):
                 config=config,
                 nombre_cajera=usuario.nombre,
                 detalle=detalle,
+                direccion=direccion,
             )
             self._label_total.configure(text="Impresa ✓", text_color="#2ECC71")
-            self._preguntar_copia(factura, items_snapshot, config, usuario.nombre, detalle)
+            self._preguntar_copia(factura, items_snapshot, config, usuario.nombre, detalle, direccion)
         except Exception as exc:
             self._label_total.configure(text="Guardada (sin imprimir)", text_color="#F39C12")
             self._mostrar_error_impresion(str(exc))
@@ -581,6 +601,7 @@ class FacturarView(ctk.CTkFrame):
         config: dict,
         nombre_cajera: str,
         detalle: str | None,
+        direccion: str | None = None,
     ) -> None:
         """Muestra un popup preguntando si se desea imprimir una copia."""
         raiz = self.winfo_toplevel()
@@ -614,6 +635,7 @@ class FacturarView(ctk.CTkFrame):
                     config=config,
                     nombre_cajera=nombre_cajera,
                     detalle=detalle,
+                    direccion=direccion,
                     es_copia=True,
                 )
             except Exception as exc:
