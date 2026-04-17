@@ -193,6 +193,17 @@ class CuadreView(ctk.CTkFrame):
 
         ctk.CTkButton(
             fila,
+            text="re-imprimir",
+            width=80,
+            height=30,
+            font=ctk.CTkFont(size=12),
+            fg_color="transparent",
+            border_width=1,
+            command=lambda f=factura: self._reimprimir_factura(f),
+        ).grid(row=0, column=4, padx=(0, 4), pady=4)
+
+        ctk.CTkButton(
+            fila,
             text="Detalles",
             width=80,
             height=30,
@@ -200,7 +211,7 @@ class CuadreView(ctk.CTkFrame):
             fg_color="transparent",
             border_width=1,
             command=lambda f=factura: self._ver_detalles(f),
-        ).grid(row=0, column=4, padx=(0, 8), pady=4)
+        ).grid(row=0, column=5, padx=(0, 8), pady=4)
 
     def _renderizar_cuadres(self) -> None:
         """Limpia y re-renderiza el historial de cuadres."""
@@ -352,6 +363,36 @@ class CuadreView(ctk.CTkFrame):
         texto.configure(state="disabled")
 
         ctk.CTkButton(dialogo, text="Cerrar", width=100, command=dialogo.destroy).pack(pady=(0, 16))
+
+    def _reimprimir_factura(self, factura: Factura) -> None:
+        """Reimprime el recibo de una factura ya registrada."""
+        try:
+            from app.printing import impresora
+            from app.repositories import configuracion_repo
+
+            items_db = factura_item_repo.listar_por_factura(factura.id)
+            items = {
+                item.id: {
+                    "nombre": item.nombre,
+                    "precio_unitario": item.precio_unitario,
+                    "cantidad": item.cantidad,
+                }
+                for item in items_db
+            }
+            config = configuracion_repo.get_all()
+            nombre_cajera = Session().usuario_actual.nombre
+            impresora.imprimir_recibo(
+                factura=factura,
+                items=items,
+                config=config,
+                nombre_cajera=nombre_cajera,
+                detalle=factura.detalle,
+                direccion=factura.direccion,
+                es_copia=True,
+            )
+        except RuntimeError as e:
+            from tkinter import messagebox
+            messagebox.showerror("Error de impresión", str(e))
 
     def _cuadrar(self) -> None:
         """Crea un cuadre agrupando todas las facturas pendientes del usuario (transacción atómica)."""
