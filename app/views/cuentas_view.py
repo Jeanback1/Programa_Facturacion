@@ -9,6 +9,7 @@ import customtkinter as ctk
 from app.models.usuario import Usuario
 from app.repositories import usuario_repo
 from app.session import Session
+from app.theme import ThemeManager
 
 
 class CuentasView(ctk.CTkFrame):
@@ -110,7 +111,8 @@ class CuentasView(ctk.CTkFrame):
         ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 8))
 
         # Badge de rol
-        rol_color = "#6E2C00" if usuario.es_admin else "#1A5276"
+        _c = ThemeManager().color
+        rol_color = _c("badge_admin") if usuario.es_admin else _c("badge_cajera")
         ctk.CTkLabel(
             fila,
             text=usuario.rol,
@@ -130,8 +132,8 @@ class CuentasView(ctk.CTkFrame):
                 height=32,
                 fg_color="transparent",
                 border_width=1,
-                text_color="#FF5555",
-                hover_color="#922B21",
+                text_color=ThemeManager().color("error_text"),
+                hover_color=ThemeManager().color("danger_hover"),
                 font=ctk.CTkFont(size=12),
                 command=lambda u=usuario: self._confirmar_eliminar(u),
             ).grid(row=0, column=2, rowspan=2, padx=(0, 12), pady=8)
@@ -181,8 +183,8 @@ class CuentasView(ctk.CTkFrame):
             frame_btns,
             text="Eliminar",
             width=120,
-            fg_color="#C0392B",
-            hover_color="#922B21",
+            fg_color=ThemeManager().color("danger_bg"),
+            hover_color=ThemeManager().color("danger_hover"),
             command=_eliminar,
         ).pack(side="left", padx=10)
 
@@ -233,7 +235,7 @@ class CuentasView(ctk.CTkFrame):
         label_error = ctk.CTkLabel(
             contenedor,
             text="",
-            text_color="#FF5555",
+            text_color=ThemeManager().color("error_text"),
             font=ctk.CTkFont(size=12),
             wraplength=348,
         )

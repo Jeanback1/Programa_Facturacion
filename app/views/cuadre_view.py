@@ -6,6 +6,7 @@ from collections.abc import Callable
 import customtkinter as ctk
 
 from app.database.connection import get_connection
+from app.theme import ThemeManager
 from app.models.cuadre import Cuadre
 from app.models.factura import Factura
 from app.repositories import cuadre_repo, factura_item_repo, factura_repo
@@ -149,7 +150,7 @@ class CuadreView(ctk.CTkFrame):
             self._frame_facturas,
             height=44,
             border_width=1,
-            border_color="#555555",
+            border_color=ThemeManager().color("border"),
             corner_radius=6,
         )
         fila.pack(fill="x", padx=8, pady=3)
@@ -235,7 +236,7 @@ class CuadreView(ctk.CTkFrame):
         fila = ctk.CTkFrame(
             self._frame_cuadres,
             border_width=1,
-            border_color="#555555",
+            border_color=ThemeManager().color("border"),
             corner_radius=6,
         )
         fila.pack(fill="x", padx=4, pady=3)
@@ -245,7 +246,6 @@ class CuadreView(ctk.CTkFrame):
             fila,
             text=cuadre.hora_cuadre[:16],
             font=ctk.CTkFont(size=11),
-            text_color="white",
         ).pack(side="left", padx=10, pady=8)
 
         # Texto a la derecha (Total)
@@ -415,7 +415,7 @@ class CuadreView(ctk.CTkFrame):
             conn.commit()
         except Exception:
             conn.rollback()
-            self._btn_cuadrar.configure(text="Error", fg_color="#C0392B")
+            self._btn_cuadrar.configure(text="Error", fg_color=ThemeManager().color("danger_bg"))
             self.after(
                 2000,
                 lambda: self._btn_cuadrar.configure(

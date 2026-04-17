@@ -54,9 +54,11 @@ class App(ctk.CTk):
 
 def main() -> None:
     """Inicializa la aplicación y abre la pantalla de login."""
-    ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
     run_migrations()
+    from app.theme import ThemeManager
+    from app.repositories import configuracion_repo
+    ThemeManager().apply(configuracion_repo.get("theme_mode") or "dark")
     app = App()
     app.mainloop()
 

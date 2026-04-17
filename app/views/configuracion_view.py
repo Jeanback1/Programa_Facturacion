@@ -6,6 +6,7 @@ from collections.abc import Callable
 import customtkinter as ctk
 
 from app.repositories import configuracion_repo
+from app.theme import ThemeManager
 
 # Campos del formulario: (clave_bd, etiqueta, placeholder)
 _CAMPOS: list[tuple[str, str, str]] = [
@@ -120,5 +121,5 @@ class ConfiguracionView(ctk.CTkFrame):
         """Persiste todos los campos del formulario en la BD."""
         for clave, entry in self._entradas.items():
             configuracion_repo.set(clave, entry.get().strip())
-        self._lbl_estado.configure(text="Guardado ✓", text_color="#2ECC71")
+        self._lbl_estado.configure(text="Guardado ✓", text_color=ThemeManager().color("success"))
         self.after(2000, lambda: self._lbl_estado.configure(text=""))

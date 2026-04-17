@@ -119,6 +119,7 @@ def _insertar_config_inicial(conn) -> None:
         ("rnc",              ""),
         ("mensaje_pie",      "¡Gracias por su compra!"),
         ("impresora_nombre", "EPSON TM-T20II"),
+        ("theme_mode",       "dark"),
     ]
     conn.executemany(
         "INSERT OR IGNORE INTO configuracion (clave, valor) VALUES (?, ?)",

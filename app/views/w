@@ -6,7 +6,6 @@ from collections.abc import Callable
 import customtkinter as ctk
 
 from app.session import Session
-from app.theme import ThemeManager
 
 
 class HomeView(ctk.CTkFrame):
@@ -52,18 +51,6 @@ class HomeView(ctk.CTkFrame):
             border_width=1,
             command=self._cerrar_sesion,
         ).pack(side="right", padx=20, pady=15)
-
-        # Botón alternar tema (a la izquierda del botón de cerrar sesión)
-        tm = ThemeManager()
-        ctk.CTkButton(
-            header,
-            text="☀ Claro" if tm.mode == "dark" else "☾ Oscuro",
-            width=120,
-            height=34,
-            fg_color="transparent",
-            border_width=1,
-            command=self._toggle_tema,
-        ).pack(side="right", padx=(0, 8), pady=15)
 
         # Nombre del usuario activo junto al botón
         ctk.CTkLabel(
@@ -128,11 +115,6 @@ class HomeView(ctk.CTkFrame):
             ).grid(row=2, column=0, columnspan=2, padx=18, pady=10)
 
     # ── Acciones ───────────────────────────────────────────────────────────────
-
-    def _toggle_tema(self) -> None:
-        """Alterna entre modo claro y oscuro y recarga la vista."""
-        ThemeManager().toggle()
-        self._navigate("home")
 
     def _cerrar_sesion(self) -> None:
         """Limpia la sesión activa y regresa a la pantalla de login."""

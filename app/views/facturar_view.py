@@ -9,6 +9,7 @@ from app.models.producto import Producto
 from app.printing import impresora
 from app.repositories import configuracion_repo, factura_item_repo, factura_repo, producto_repo
 from app.session import Session
+from app.theme import ThemeManager
 
 
 class FacturarView(ctk.CTkFrame):
@@ -195,7 +196,7 @@ class FacturarView(ctk.CTkFrame):
             frame_total,
             text="$0",
             font=ctk.CTkFont(size=14, weight="bold"),
-            text_color="#2ECC71",
+            text_color=ThemeManager().color("success"),
         )
         self._label_total.pack(side="right", padx=12)
 
@@ -218,8 +219,8 @@ class FacturarView(ctk.CTkFrame):
             text="Eliminar",
             font=ctk.CTkFont(size=15, weight="bold"),
             height=44,
-            fg_color="#C0392B",
-            hover_color="#922B21",
+            fg_color=ThemeManager().color("danger_bg"),
+            hover_color=ThemeManager().color("danger_hover"),
             command=self._limpiar_factura,
         ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
 
@@ -309,7 +310,7 @@ class FacturarView(ctk.CTkFrame):
             height=self._card_height,
             corner_radius=8,
             border_width=2,
-            border_color='#555555'
+            border_color=ThemeManager().color("border"),
         )
         tarjeta.grid(
             row=row, column=col,
@@ -326,7 +327,6 @@ class FacturarView(ctk.CTkFrame):
             tarjeta,
             text=f"#{producto.id} - {producto.nombre}",
             font=ctk.CTkFont(size=font_size, weight="bold"),
-            text_color="white",
             wraplength=self._card_width - 16,
             anchor="center",
             justify="center",
@@ -376,7 +376,7 @@ class FacturarView(ctk.CTkFrame):
                 self._frame_factura,
                 height=self._item_height,
                 border_width=1,
-                border_color="#555555",
+                border_color=ThemeManager().color("border"),
                 corner_radius=6
             )
             item_frame.pack(fill="x", padx=8, pady=4)
@@ -429,8 +429,8 @@ class FacturarView(ctk.CTkFrame):
                 width=int(24 * fs / 14),
                 height=int(24 * fs / 14),
                 font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
-                fg_color="#C0392B",
-                hover_color="#922B21",
+                fg_color=ThemeManager().color("danger_bg"),
+                hover_color=ThemeManager().color("danger_hover"),
                 command=lambda p=pid: self._eliminar_item(p),
             ).grid(row=0, column=4, padx=(4, 8), pady=4)
 
@@ -504,7 +504,7 @@ class FacturarView(ctk.CTkFrame):
         entry_precio.insert(0, f"{item['precio_unitario']:,.0f}")
         entry_precio.pack(pady=(2, 4), padx=16)
 
-        lbl_error = ctk.CTkLabel(popup, text="", text_color="#FF5555", font=ctk.CTkFont(size=11))
+        lbl_error = ctk.CTkLabel(popup, text="", text_color=ThemeManager().color("error_text"), font=ctk.CTkFont(size=11))
         lbl_error.pack()
 
         def _confirmar() -> None:
@@ -571,8 +571,9 @@ class FacturarView(ctk.CTkFrame):
     def imprimir_factura(self) -> None:
         """Guarda la factura en la BD, la imprime y limpia el formulario."""
         if not self._items:
-            self._label_total.configure(text="Sin ítems", text_color="#FF5555")
-            self.after(1500, lambda: self._label_total.configure(text="$0", text_color="#2ECC71"))
+            _c = ThemeManager().color
+            self._label_total.configure(text="Sin ítems", text_color=_c("error_text"))
+            self.after(1500, lambda: self._label_total.configure(text="$0", text_color=ThemeManager().color("success")))
             return
 
         usuario = Session().usuario_actual
@@ -586,11 +587,11 @@ class FacturarView(ctk.CTkFrame):
             )
             factura_item_repo.crear_items(factura.id, items_snapshot)
         except RuntimeError:
-            self._label_total.configure(text="Error al guardar", text_color="#FF5555")
+            self._label_total.configure(text="Error al guardar", text_color=ThemeManager().color("error_text"))
             self.after(
                 2000,
                 lambda: self._label_total.configure(
-                    text=f"${self._total:,.0f}", text_color="#2ECC71"
+                    text=f"${self._total:,.0f}", text_color=ThemeManager().color("success")
                 ),
             )
             return
@@ -607,13 +608,13 @@ class FacturarView(ctk.CTkFrame):
                 detalle=detalle,
                 direccion=direccion,
             )
-            self._label_total.configure(text="Impresa ✓", text_color="#2ECC71")
+            self._label_total.configure(text="Impresa ✓", text_color=ThemeManager().color("success"))
             self._preguntar_copia(factura, items_snapshot, config, usuario.nombre, detalle, direccion)
         except Exception as exc:
             self._label_total.configure(text="Guardada (sin imprimir)", text_color="#F39C12")
             self._mostrar_error_impresion(str(exc))
 
-        self.after(2500, lambda: self._label_total.configure(text="$0", text_color="#2ECC71"))
+        self.after(2500, lambda: self._label_total.configure(text="$0", text_color=ThemeManager().color("success")))
 
     def _preguntar_copia(
         self,
@@ -707,7 +708,7 @@ class FacturarView(ctk.CTkFrame):
             popup,
             text=mensaje,
             font=ctk.CTkFont(size=12),
-            text_color="#FF5555",
+            text_color=ThemeManager().color("error_text"),
             wraplength=380,
         ).pack(pady=(0, 12), padx=16)
 
@@ -773,7 +774,7 @@ class FacturarView(ctk.CTkFrame):
                 self._frame_factura,
                 height=ih,
                 border_width=1,
-                border_color="#555555",
+                border_color=ThemeManager().color("border"),
                 corner_radius=6,
             )
             item_frame.pack(fill="x", padx=8, pady=4)
@@ -826,8 +827,8 @@ class FacturarView(ctk.CTkFrame):
                 width=int(24 * fs / 14),
                 height=int(24 * fs / 14),
                 font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
-                fg_color="#C0392B",
-                hover_color="#922B21",
+                fg_color=ThemeManager().color("danger_bg"),
+                hover_color=ThemeManager().color("danger_hover"),
                 command=lambda p=pid: self._eliminar_item(p),
             ).grid(row=0, column=4, padx=(4, 8), pady=4)
 

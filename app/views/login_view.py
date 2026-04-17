@@ -8,6 +8,7 @@ import customtkinter as ctk
 
 from app.repositories import usuario_repo
 from app.session import Session
+from app.theme import ThemeManager
 
 
 class LoginView(ctk.CTkFrame):
@@ -70,7 +71,7 @@ class LoginView(ctk.CTkFrame):
         self._label_error = ctk.CTkLabel(
             frame,
             text="",
-            text_color="#FF5555",
+            text_color=ThemeManager().color("error_text"),
             font=ctk.CTkFont(size=12),
             width=300,
             wraplength=300,

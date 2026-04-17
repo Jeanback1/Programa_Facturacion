@@ -6,6 +6,7 @@ from collections.abc import Callable
 import customtkinter as ctk
 
 from app.repositories import producto_repo
+from app.theme import ThemeManager
 
 
 class GestionView(ctk.CTkFrame):
@@ -174,8 +175,8 @@ class GestionView(ctk.CTkFrame):
                 height=26,
                 fg_color="transparent",
                 border_width=1,
-                text_color="#FF5555",
-                hover_color="#922B21",
+                text_color=ThemeManager().color("error_text"),
+                hover_color=ThemeManager().color("danger_hover"),
                 font=ctk.CTkFont(size=12),
                 command=lambda prod=p: self._confirmar_eliminar(prod),
             ).grid(row=0, column=2, sticky="e", padx=(4, 8))
@@ -223,13 +224,14 @@ class GestionView(ctk.CTkFrame):
             frame_btns,
             text="Eliminar",
             width=120,
-            fg_color="#C0392B",
-            hover_color="#922B21",
+            fg_color=ThemeManager().color("danger_bg"),
+            hover_color=ThemeManager().color("danger_hover"),
             command=_eliminar,
         ).pack(side="left", padx=10)
 
     def _mostrar_mensaje(self, texto: str, *, error: bool) -> None:
-        color = "#FF5555" if error else "#2ECC71"
+        _c = ThemeManager().color
+        color = _c("error_text") if error else _c("success")
         self._label_mensaje.configure(text=texto, text_color=color)
 
     def _volver_a_home(self) -> None:
