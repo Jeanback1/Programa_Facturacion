@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Módulo de impresión de recibos en impresoras térmicas ESC/POS (Epson TM-T20II)."""
 
+import textwrap
+
 from app.models.factura import Factura
 
 _LINE_WIDTH = 42  # caracteres por línea en papel 80 mm con fuente estándar A
@@ -79,11 +81,12 @@ def _imprimir_cuerpo(
     p.text(f"Cajera:       {nombre_cajera}\n")
     p.text(f"Fecha:        {fecha}   {hora_str}\n")
     if direccion:
-        p.text(f"Dirección:    {direccion}"[:_LINE_WIDTH] + "\n")
+        for linea in _wrap_campo("Dirección:    ", direccion):
+            p.text(linea + "\n")
     p.text("\n")
 
     # ── Separador IMPRESION ────────────────────────────────────────────────────
-    titulo = " IMPRESION "
+    titulo = " REIMPRESION " if es_copia else " IMPRESION "
     relleno = "*" * ((_LINE_WIDTH - len(titulo)) // 2)
     p.text(f"{relleno}{titulo}{relleno}\n")
     p.text("\n")
@@ -91,8 +94,7 @@ def _imprimir_cuerpo(
     # ── Bloque FACTURA CONTADO ─────────────────────────────────────────────────
     p.text("-" * _LINE_WIDTH + "\n")
     p.set(align="center", bold=True)
-    titulo_factura = "FACTURA CONTADO (COPIA)" if es_copia else "FACTURA CONTADO"
-    p.text(titulo_factura + "\n")
+    p.text("FACTURA CONTADO\n")
     p.set(align="left", bold=False)
     p.text("-" * _LINE_WIDTH + "\n")
     p.text("\n")
@@ -117,7 +119,8 @@ def _imprimir_cuerpo(
     # ── Nota opcional ─────────────────────────────────────────────────────────
     if detalle:
         p.text("-" * _LINE_WIDTH + "\n")
-        p.text(f"Nota: {detalle}"[:_LINE_WIDTH] + "\n")
+        for linea in _wrap_campo("Nota: ", detalle):
+            p.text(linea + "\n")
         p.text("\n")
 
 
@@ -134,6 +137,14 @@ def _imprimir_linea_item(p, item: dict) -> None:
 
     if item["cantidad"] > 1:
         p.text(f"    @ ${item['precio_unitario']:,.0f} c/u\n")
+
+
+def _wrap_campo(label: str, texto: str) -> list[str]:
+    indent = " " * len(label)
+    lineas = textwrap.wrap(texto, _LINE_WIDTH - len(label))
+    if not lineas:
+        return [label]
+    return [label + lineas[0]] + [indent + l for l in lineas[1:]]
 
 
 def _imprimir_pie(p, config: dict[str, str]) -> None:
