@@ -63,6 +63,7 @@ class FacturarView(ctk.CTkFrame):
             height=36,
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             font=ctk.CTkFont(size=18),
             command=self._volver_a_home,
         ).pack(side="left", padx=16, pady=10)
@@ -111,6 +112,7 @@ class FacturarView(ctk.CTkFrame):
             width=24, height=24,
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             font=ctk.CTkFont(size=14, weight="bold"),
             command=self._reducir_catalogo,
         ).grid(row=0, column=2, padx=(0, 2))
@@ -121,6 +123,7 @@ class FacturarView(ctk.CTkFrame):
             width=24, height=24,
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             font=ctk.CTkFont(size=14, weight="bold"),
             command=self._aumentar_catalogo,
         ).grid(row=0, column=3, padx=(0, 4))
@@ -156,6 +159,7 @@ class FacturarView(ctk.CTkFrame):
             width=24, height=24,
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             font=ctk.CTkFont(size=14, weight="bold"),
             command=self._reducir_factura,
         ).grid(row=0, column=2, padx=(0, 2))
@@ -166,6 +170,7 @@ class FacturarView(ctk.CTkFrame):
             width=24, height=24,
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             font=ctk.CTkFont(size=14, weight="bold"),
             command=self._aumentar_factura,
         ).grid(row=0, column=3, padx=(0, 4))
@@ -404,6 +409,7 @@ class FacturarView(ctk.CTkFrame):
                 font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
                 fg_color="transparent",
                 border_width=1,
+                text_color=ThemeManager().color("transparent_btn_text"),
                 command=lambda p=pid: self._abrir_popup_cantidad(p),
             ).grid(row=0, column=1, padx=4, pady=4)
 
@@ -676,6 +682,7 @@ class FacturarView(ctk.CTkFrame):
             width=100,
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             command=popup.destroy,
         ).pack(side="left")
 
@@ -802,6 +809,7 @@ class FacturarView(ctk.CTkFrame):
                 font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
                 fg_color="transparent",
                 border_width=1,
+                text_color=ThemeManager().color("transparent_btn_text"),
                 command=lambda p=pid: self._abrir_popup_cantidad(p),
             ).grid(row=0, column=1, padx=4, pady=4)
 

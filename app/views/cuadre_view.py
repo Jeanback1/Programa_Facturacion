@@ -47,6 +47,7 @@ class CuadreView(ctk.CTkFrame):
             height=36,
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             font=ctk.CTkFont(size=18),
             command=lambda: self._navigate("home"),
         ).pack(side="left", padx=16, pady=10)
@@ -200,6 +201,7 @@ class CuadreView(ctk.CTkFrame):
             font=ctk.CTkFont(size=12),
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             command=lambda f=factura: self._reimprimir_factura(f),
         ).grid(row=0, column=4, padx=(0, 4), pady=4)
 
@@ -211,6 +213,7 @@ class CuadreView(ctk.CTkFrame):
             font=ctk.CTkFont(size=12),
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             command=lambda f=factura: self._ver_detalles(f),
         ).grid(row=0, column=5, padx=(0, 8), pady=4)
 

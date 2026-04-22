@@ -38,6 +38,7 @@ class GestionView(ctk.CTkFrame):
             height=36,
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             font=ctk.CTkFont(size=18),
             command=self._volver_a_home,
         ).pack(side="left", padx=16, pady=10)
@@ -212,6 +213,7 @@ class GestionView(ctk.CTkFrame):
             width=120,
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             command=dialogo.destroy,
         ).pack(side="left", padx=10)
 

@@ -50,6 +50,7 @@ class HomeView(ctk.CTkFrame):
             height=34,
             fg_color="transparent",
             border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
             command=self._cerrar_sesion,
         ).pack(side="right", padx=20, pady=15)
 
@@ -62,6 +63,7 @@ class HomeView(ctk.CTkFrame):
             height=34,
             fg_color="transparent",
             border_width=1,
+            text_color=tm.color("transparent_btn_text"),
             command=self._toggle_tema,
         ).pack(side="right", padx=(0, 8), pady=15)
 

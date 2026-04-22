@@ -12,7 +12,8 @@ _COLORS: dict[str, dict[str, str]] = {
     "border":       {"dark": "#555555", "light": "#BBBBBB"},
     "error_text":   {"dark": "#FF5555", "light": "#CC0000"},
     "badge_admin":  {"dark": "#6E2C00", "light": "#D35400"},
-    "badge_cajera": {"dark": "#1A5276", "light": "#2980B9"},
+    "badge_cajera":          {"dark": "#1A5276", "light": "#2980B9"},
+    "transparent_btn_text":  {"dark": "#DCE4EE", "light": "#1A1A1A"},
 }
 
 
