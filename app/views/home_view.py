@@ -127,7 +127,14 @@ class HomeView(ctk.CTkFrame):
                 text="Configuración",
                 command=lambda: self._navigate("configuracion"),
                 **btn_kwargs,
-            ).grid(row=2, column=0, columnspan=2, padx=18, pady=10)
+            ).grid(row=2, column=0, padx=18, pady=10)
+
+            ctk.CTkButton(
+                botones_frame,
+                text="Historial de\nFacturas",
+                command=lambda: self._navigate("facturas_admin"),
+                **btn_kwargs,
+            ).grid(row=2, column=1, padx=18, pady=10)
 
     # ── Acciones ───────────────────────────────────────────────────────────────
 

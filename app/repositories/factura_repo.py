@@ -48,6 +48,30 @@ def listar_sin_cuadrar(usuario_id: int) -> list[Factura]:
         raise RuntimeError(f"Error listando facturas sin cuadrar: {e}") from e
 
 
+def listar_todos() -> list[Factura]:
+    """Retorna todas las facturas de todos los usuarios, ordenadas de más reciente a más antigua."""
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            "SELECT * FROM facturas ORDER BY hora_facturacion DESC"
+        )
+        return [_fila_a_factura(fila) for fila in cursor.fetchall()]
+    except sqlite3.Error as e:
+        raise RuntimeError(f"Error listando todas las facturas: {e}") from e
+
+
+def eliminar(id: int) -> None:
+    """Elimina una factura y sus ítems asociados."""
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM factura_items WHERE factura_id = ?", (id,))
+        conn.execute("DELETE FROM facturas WHERE id = ?", (id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        raise RuntimeError(f"Error eliminando factura: {e}") from e
+
+
 # ── Helpers privados ───────────────────────────────────────────────────────────
 
 def _buscar_por_id(id: int, conn) -> Optional[Factura]:
