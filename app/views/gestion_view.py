@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Vista de gestión de productos — solo accesible para administradores."""
 
+import unicodedata
 from collections.abc import Callable
 
 import customtkinter as ctk
@@ -159,15 +160,25 @@ class GestionView(ctk.CTkFrame):
         # ── Columna derecha — lista de productos ────────────────────
         col_lista = ctk.CTkFrame(contenido, fg_color="transparent")
         col_lista.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        col_lista.grid_rowconfigure(0, weight=1)
+        col_lista.grid_rowconfigure(1, weight=1)
         col_lista.grid_columnconfigure(0, weight=1)
+
+        # Barra de búsqueda de productos (filtra en tiempo real por nombre)
+        self._var_busqueda = ctk.StringVar()
+        self._var_busqueda.trace_add("write", lambda *_: self._cargar_lista())
+
+        ctk.CTkEntry(
+            col_lista,
+            textvariable=self._var_busqueda,
+            placeholder_text="Buscar producto…",
+        ).grid(row=0, column=0, sticky="ew", padx=4, pady=(0, 8))
 
         self._frame_lista = ctk.CTkScrollableFrame(
             col_lista,
             label_text="Productos registrados",
             label_font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self._frame_lista.grid(row=0, column=0, sticky="nsew")
+        self._frame_lista.grid(row=1, column=0, sticky="nsew")
         self._frame_lista.grid_columnconfigure(0, weight=1)
 
         self._cargar_lista()
@@ -315,6 +326,12 @@ class GestionView(ctk.CTkFrame):
                 widget.destroy()
         self._filas_comer_llevar.clear()
 
+    @staticmethod
+    def _normalizar(texto: str) -> str:
+        """Quita tildes y pasa a minúsculas para comparar sin distinción."""
+        texto = unicodedata.normalize("NFD", texto)
+        return "".join(c for c in texto if unicodedata.category(c) != "Mn").lower()
+
     def _cargar_lista(self) -> None:
         """Destruye y re-renderiza la lista de productos desde la BD."""
         for widget in self._frame_lista.winfo_children():
@@ -322,10 +339,21 @@ class GestionView(ctk.CTkFrame):
 
         productos = producto_repo.listar_todos()
 
+        # Filtro de búsqueda por nombre (ignora mayúsculas y tildes)
+        filtro = self._normalizar(self._var_busqueda.get())
+        if filtro:
+            productos = [
+                p for p in productos if filtro in self._normalizar(p.nombre)
+            ]
+
         if not productos:
+            if filtro:
+                texto = "No hay productos que coincidan"
+            else:
+                texto = "No hay productos registrados"
             ctk.CTkLabel(
                 self._frame_lista,
-                text="No hay productos registrados",
+                text=texto,
                 text_color="gray",
             ).pack(pady=20)
             return
