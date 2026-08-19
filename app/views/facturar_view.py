@@ -24,8 +24,9 @@ class FacturarView(ctk.CTkFrame):
         master.minsize(800, 500)
         master.resizable(True, True)
 
-        # Estado de la factura actual: {product_id: {nombre, precio_unitario, cantidad, label}}
-        self._items: dict[int, dict] = {}
+        # Estado de la factura actual: {(producto_id, variante_id): {nombre, precio_unitario, cantidad,...}}
+        # variante_id es None para productos sin variantes.
+        self._items: dict[tuple[int, int | None], dict] = {}
         self._total: float = 0.0
 
         # Productos cargados desde la BD (se usan para filtrar en búsqueda)
@@ -337,13 +338,25 @@ class FacturarView(ctk.CTkFrame):
             justify="center",
         ).grid(row=0, column=0, padx=8, pady=(10, 4), sticky="nsew")
 
+        # El botón "Agregar" abre el popup de variantes si el producto las tiene;
+        # de lo contrario agrega directo como siempre.
+        if producto.variantes:
+            texto_boton = "Elegir opción"
+            accion = lambda p=producto: self._abrir_popup_variantes(p)
+            fg_color = ThemeManager().color("success")
+        else:
+            texto_boton = "Agregar"
+            accion = lambda p=producto: self._agregar_a_factura(p)
+            fg_color = "transparent"
+
         ctk.CTkButton(
             tarjeta,
-            text="Agregar",
+            text=texto_boton,
             width=self._card_width - 24,
             height=30,
+            fg_color=fg_color,
             font=ctk.CTkFont(size=font_size),
-            command=lambda p=producto: self._agregar_a_factura(p),
+            command=accion,
         ).grid(row=1, column=0, padx=12, pady=(0, 10))
 
     def _buscar_producto(self) -> None:
@@ -361,13 +374,72 @@ class FacturarView(ctk.CTkFrame):
 
     # ── Factura ─────────────────────────────────────────────────────────────────
 
-    def _agregar_a_factura(self, producto: Producto) -> None:
-        """Agrega el producto a la factura o incrementa su cantidad si ya existe."""
-        pid = producto.id
+    def _abrir_popup_variantes(self, producto: Producto) -> None:
+        """Muestra un popup para elegir una variante antes de agregar el producto."""
+        raiz = self.winfo_toplevel()
+        popup = ctk.CTkToplevel(raiz)
+        popup.title("Elegir variante")
+        popup.resizable(False, False)
+        popup.transient(raiz)
 
-        if pid in self._items:
-            self._items[pid]["cantidad"] += 1
-            item = self._items[pid]
+        ancho, alto = 320, 200
+        raiz.update_idletasks()
+        x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
+        popup.geometry(f"{ancho}x{alto}+{x}+{y}")
+        popup.after(50, popup.grab_set)
+
+        ctk.CTkLabel(
+            popup,
+            text=producto.nombre,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            wraplength=280,
+            justify="center",
+        ).pack(pady=(20, 4), padx=16)
+
+        ctk.CTkLabel(
+            popup,
+            text="Elija la variante:",
+            font=ctk.CTkFont(size=12),
+            text_color="gray",
+        ).pack(pady=(0, 10))
+
+        frame_btns = ctk.CTkFrame(popup, fg_color="transparent")
+        frame_btns.pack()
+
+        def _elegir(variante) -> None:
+            popup.destroy()
+            self._agregar_a_factura(producto, variante)
+
+        for v in producto.variantes:
+            ctk.CTkButton(
+                frame_btns,
+                text=f"{v.nombre} — ${v.precio:,.0f}",
+                width=250,
+                height=34,
+                font=ctk.CTkFont(size=13),
+                command=lambda var=v: _elegir(var),
+            ).pack(pady=3)
+
+        popup.bind("<Escape>", lambda _e: popup.destroy())
+
+    def _clave(self, producto: Producto, variante) -> tuple[int, int | None]:
+        """Clave compuesta de un ítem en la factura: (producto_id, variante_id)."""
+        return (producto.id, variante.id if variante is not None else None)
+
+    def _agregar_a_factura(self, producto: Producto, variante=None) -> None:
+        """Agrega el producto (o su variante) a la factura o incrementa su cantidad.
+
+        Si variante no es None, el ítem usa el nombre y precio de ESA variante,
+        y se trata como un ítem distinto del producto base (clave compuesta).
+        """
+        clave = self._clave(producto, variante)
+        nombre = variante.nombre if variante is not None else producto.nombre
+        precio = variante.precio if variante is not None else producto.precio
+
+        if clave in self._items:
+            self._items[clave]["cantidad"] += 1
+            item = self._items[clave]
             item["lbl_cantidad"].configure(text=f"{item['cantidad']:g}")
             total = item["precio_unitario"] * item["cantidad"]
             item["lbl_precio"].configure(text=f"${total:,.0f}")
@@ -410,19 +482,19 @@ class FacturarView(ctk.CTkFrame):
                 fg_color="transparent",
                 border_width=1,
                 text_color=ThemeManager().color("transparent_btn_text"),
-                command=lambda p=pid: self._abrir_popup_cantidad(p),
+                command=lambda k=clave: self._abrir_popup_cantidad(k),
             ).grid(row=0, column=1, padx=4, pady=4)
 
             ctk.CTkLabel(
                 item_frame,
-                text=producto.nombre,
+                text=nombre,
                 font=ctk.CTkFont(size=fs),
                 anchor="w",
             ).grid(row=0, column=2, padx=4, pady=4, sticky="ew")
 
             lbl_precio = ctk.CTkLabel(
                 item_frame,
-                text=f"${producto.precio:,.0f}",
+                text=f"${precio:,.0f}",
                 font=ctk.CTkFont(size=fs, weight="bold"),
                 width=int(80 * fs / 14),
                 anchor="e",
@@ -437,24 +509,24 @@ class FacturarView(ctk.CTkFrame):
                 font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
                 fg_color=ThemeManager().color("danger_bg"),
                 hover_color=ThemeManager().color("danger_hover"),
-                command=lambda p=pid: self._eliminar_item(p),
+                command=lambda k=clave: self._eliminar_item(k),
             ).grid(row=0, column=4, padx=(4, 8), pady=4)
 
-            self._items[pid] = {
-                "nombre": producto.nombre,
-                "precio_unitario": producto.precio,
+            self._items[clave] = {
+                "nombre": nombre,
+                "precio_unitario": precio,
                 "cantidad": 1,
                 "label": item_frame,
                 "lbl_cantidad": lbl_cantidad,
                 "lbl_precio": lbl_precio,
             }
 
-        self._total += producto.precio
+        self._total += precio
         self._label_total.configure(text=f"${self._total:,.0f}")
 
-    def _eliminar_item(self, pid: int) -> None:
+    def _eliminar_item(self, clave: tuple[int, int | None]) -> None:
         """Elimina un ítem de la factura y actualiza el total."""
-        item = self._items.pop(pid)
+        item = self._items.pop(clave)
         self._total -= item["precio_unitario"] * item["cantidad"]
         item["label"].destroy()
 
@@ -471,9 +543,9 @@ class FacturarView(ctk.CTkFrame):
         else:
             self._label_total.configure(text=f"${self._total:,.0f}")
 
-    def _abrir_popup_cantidad(self, pid: int) -> None:
+    def _abrir_popup_cantidad(self, clave: tuple[int, int | None]) -> None:
         """Abre un popup para editar la cantidad y el precio unitario de un ítem."""
-        item = self._items[pid]
+        item = self._items[clave]
         raiz = self.winfo_toplevel()
 
         popup = ctk.CTkToplevel(raiz)
@@ -776,7 +848,7 @@ class FacturarView(ctk.CTkFrame):
         fs = self._item_font_size
         ih = self._item_height
 
-        for pid, item in self._items.items():
+        for clave, item in self._items.items():
             item_frame = ctk.CTkFrame(
                 self._frame_factura,
                 height=ih,
@@ -810,7 +882,7 @@ class FacturarView(ctk.CTkFrame):
                 fg_color="transparent",
                 border_width=1,
                 text_color=ThemeManager().color("transparent_btn_text"),
-                command=lambda p=pid: self._abrir_popup_cantidad(p),
+                command=lambda k=clave: self._abrir_popup_cantidad(k),
             ).grid(row=0, column=1, padx=4, pady=4)
 
             ctk.CTkLabel(
@@ -837,7 +909,7 @@ class FacturarView(ctk.CTkFrame):
                 font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
                 fg_color=ThemeManager().color("danger_bg"),
                 hover_color=ThemeManager().color("danger_hover"),
-                command=lambda p=pid: self._eliminar_item(p),
+                command=lambda k=clave: self._eliminar_item(k),
             ).grid(row=0, column=4, padx=(4, 8), pady=4)
 
             item["label"] = item_frame

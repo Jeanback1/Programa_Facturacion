@@ -16,6 +16,7 @@ def run_migrations() -> None:
     try:
         _crear_tabla_usuarios(conn)
         _crear_tabla_productos(conn)
+        _crear_tabla_producto_variantes(conn)
         _crear_tabla_cuadres(conn)
         _crear_tabla_facturas(conn)
         _crear_tabla_factura_items(conn)
@@ -57,6 +58,18 @@ def _crear_tabla_productos(conn) -> None:
             id      INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre  TEXT    NOT NULL,
             precio  REAL    NOT NULL CHECK(precio >= 0)
+        )
+    """)
+
+
+def _crear_tabla_producto_variantes(conn) -> None:
+    """Crea la tabla de variantes de producto si no existe."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS producto_variantes (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+            nombre      TEXT    NOT NULL,
+            precio      REAL    NOT NULL CHECK(precio >= 0)
         )
     """)
 

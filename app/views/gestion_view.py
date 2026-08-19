@@ -57,7 +57,7 @@ class GestionView(ctk.CTkFrame):
         contenido.grid_rowconfigure(0, weight=1)
 
         # ── Columna izquierda — formulario ──────────────────────────
-        col_form = ctk.CTkFrame(contenido)
+        col_form = ctk.CTkScrollableFrame(contenido)
         col_form.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
 
         ctk.CTkLabel(
@@ -77,6 +77,37 @@ class GestionView(ctk.CTkFrame):
             col_form, placeholder_text="Ej. 1500"
         )
         self._campo_precio.pack(fill="x", padx=20, pady=(4, 18))
+
+        # ── Variantes opcionales ────────────────────────────────────
+        self._frame_variantes = ctk.CTkFrame(col_form, fg_color="transparent")
+        self._frame_variantes.pack(fill="x", padx=20, pady=(0, 10))
+
+        ctk.CTkLabel(
+            self._frame_variantes,
+            text="Variantes (opcional)",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).pack(anchor="w", pady=(0, 4))
+
+        ctk.CTkLabel(
+            self._frame_variantes,
+            text="Si agrega variantes (ej. Para llevar / Para comer aquí),\ncada una con su propio precio, al facturar se preguntará cuál elegir.\nDeje vacío para un producto normal.",
+            font=ctk.CTkFont(size=11),
+            text_color="gray",
+            justify="left",
+        ).pack(anchor="w", pady=(0, 6))
+
+        self._filas_variantes: list[tuple[ctk.CTkEntry, ctk.CTkEntry]] = []
+
+        ctk.CTkButton(
+            self._frame_variantes,
+            text="+ Agregar variante",
+            height=28,
+            fg_color="transparent",
+            border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
+            font=ctk.CTkFont(size=12),
+            command=self._agregar_fila_variante,
+        ).pack(anchor="w", pady=(0, 6))
 
         ctk.CTkButton(
             col_form,
@@ -111,7 +142,7 @@ class GestionView(ctk.CTkFrame):
         self._cargar_lista()
 
     def _agregar_producto(self) -> None:
-        """Valida el formulario, inserta el producto y refresca la lista."""
+        """Valida el formulario, inserta el producto (y variantes) y refresca la lista."""
         nombre = self._campo_nombre.get().strip()
         precio_str = self._campo_precio.get().strip().replace(",", ".")
 
@@ -127,12 +158,82 @@ class GestionView(ctk.CTkFrame):
             self._mostrar_mensaje("Ingrese un precio válido (número positivo).", error=True)
             return
 
-        producto_repo.crear(nombre, precio)
+        variantes = self._recoger_variantes()
+        if variantes is None:
+            self._mostrar_mensaje("Revise las variantes: complete nombre y precio en cada una.", error=True)
+            return
+
+        producto_repo.crear(nombre, precio, variantes)
         self._campo_nombre.delete(0, "end")
         self._campo_precio.delete(0, "end")
+        self._limpiar_variantes()
         self._campo_nombre.focus()
         self._mostrar_mensaje(f'"{nombre}" agregado correctamente.', error=False)
         self._cargar_lista()
+
+    # ── Variantes del formulario ──────────────────────────────────────────
+
+    def _agregar_fila_variante(self) -> None:
+        """Añade una fila editable (nombre + precio) para una variante."""
+        fila = ctk.CTkFrame(self._frame_variantes, fg_color="transparent")
+        fila.pack(fill="x", pady=2)
+        fila.grid_columnconfigure(0, weight=2)
+        fila.grid_columnconfigure(1, weight=1)
+        fila.grid_columnconfigure(2, weight=0)
+
+        entry_nombre = ctk.CTkEntry(fila, placeholder_text="Nombre variante")
+        entry_nombre.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+
+        entry_precio = ctk.CTkEntry(fila, placeholder_text="Precio")
+        entry_precio.grid(row=0, column=1, sticky="ew", padx=(0, 4))
+
+        def _quitar() -> None:
+            fila.destroy()
+            if (entry_nombre, entry_precio) in self._filas_variantes:
+                self._filas_variantes.remove((entry_nombre, entry_precio))
+
+        ctk.CTkButton(
+            fila,
+            text="✕",
+            width=28,
+            height=28,
+            fg_color="transparent",
+            hover_color=ThemeManager().color("danger_hover"),
+            text_color=ThemeManager().color("danger_bg"),
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=_quitar,
+        ).grid(row=0, column=2)
+
+        self._filas_variantes.append((entry_nombre, entry_precio))
+
+    def _recoger_variantes(self) -> list[tuple[str, float]] | None:
+        """Lee las filas de variantes. Devuelve la lista o None si hay alguna incompleta/inválida."""
+        variantes: list[tuple[str, float]] = []
+        for entry_nombre, entry_precio in self._filas_variantes:
+            nombre = entry_nombre.get().strip()
+            precio_str = entry_precio.get().strip()
+            # Fila totalmente vacía = se ignora
+            if not nombre and not precio_str:
+                continue
+            if not nombre:
+                return None
+            try:
+                precio = float(precio_str.replace(",", "."))
+                if precio < 0:
+                    raise ValueError
+            except ValueError:
+                return None
+            variantes.append((nombre, precio))
+        return variantes
+
+    def _limpiar_variantes(self) -> None:
+        """Elimina todas las filas de variantes del formulario."""
+        for fila in list(self._frame_variantes.winfo_children()):
+            # Solo destruye los frames de filas creados; no el label ni el botón.
+            # Las filas se guardan en _filas_variantes y son CTkFrame.
+            if isinstance(fila, ctk.CTkFrame):
+                fila.destroy()
+        self._filas_variantes.clear()
 
     def _cargar_lista(self) -> None:
         """Destruye y re-renderiza la lista de productos desde la BD."""
@@ -158,7 +259,7 @@ class GestionView(ctk.CTkFrame):
                 fila,
                 text=p.nombre,
                 anchor="w",
-                font=ctk.CTkFont(size=13),
+                font=ctk.CTkFont(size=13, weight="bold" if p.variantes else "normal"),
             ).grid(row=0, column=0, sticky="w", padx=8)
 
             ctk.CTkLabel(
@@ -181,6 +282,16 @@ class GestionView(ctk.CTkFrame):
                 font=ctk.CTkFont(size=12),
                 command=lambda prod=p: self._confirmar_eliminar(prod),
             ).grid(row=0, column=2, sticky="e", padx=(4, 8))
+
+            # Sub-líneas con las variantes del producto
+            for i, v in enumerate(p.variantes):
+                ctk.CTkLabel(
+                    fila,
+                    text=f"    · {v.nombre}: ${v.precio:,.0f}",
+                    anchor="w",
+                    text_color="gray",
+                    font=ctk.CTkFont(size=12),
+                ).grid(row=i + 1, column=0, sticky="w", columnspan=2, padx=8)
 
     def _confirmar_eliminar(self, producto) -> None:
         """Abre un diálogo modal de confirmación antes de eliminar el producto."""
