@@ -2,7 +2,7 @@
 """Repositorio de productos — operaciones CRUD sobre la tabla productos y sus variantes."""
 
 from app.database.connection import get_connection
-from app.models.producto import Producto, ProductoVariante
+from app.models.producto import Producto, ProductoVariante, GRUPO_GUARNICION, GRUPO_COMER_LLEVAR
 
 
 def listar_todos() -> list[Producto]:
@@ -26,10 +26,16 @@ def buscar(termino: str) -> list[Producto]:
     return productos
 
 
-def crear(nombre: str, precio: float, variantes: list[tuple[str, float]] | None = None) -> Producto:
+def crear(
+    nombre: str,
+    precio: float,
+    guarniciones: list[str] | None = None,
+    comer_llevar: list[tuple[str, float]] | None = None,
+) -> Producto:
     """Inserta un nuevo producto y devuelve el objeto creado.
 
-    variantes es una lista opcional de (nombre_variante, precio_variante).
+    guarniciones: lista opcional de nombres (grupo 1, solo modifica el nombre).
+    comer_llevar: lista opcional de (nombre, precio) (grupo 2).
     """
     conn = get_connection()
     cursor = conn.execute(
@@ -37,7 +43,18 @@ def crear(nombre: str, precio: float, variantes: list[tuple[str, float]] | None 
         (nombre, precio),
     )
     producto_id: int = cursor.lastrowid  # type: ignore[assignment]
-    _agregar_variantes(conn, producto_id, variantes or [])
+
+    filas = []
+    filas += [(producto_id, GRUPO_GUARNICION, g, 0.0) for g in (guarniciones or [])]
+    filas += [
+        (producto_id, GRUPO_COMER_LLEVAR, nombre_v, precio_v)
+        for nombre_v, precio_v in (comer_llevar or [])
+    ]
+    if filas:
+        conn.executemany(
+            "INSERT INTO producto_variantes (producto_id, grupo, nombre, precio) VALUES (?, ?, ?, ?)",
+            filas,
+        )
     conn.commit()
     return Producto(
         id=producto_id,
@@ -54,14 +71,6 @@ def eliminar(id: int) -> None:
     conn.commit()
 
 
-def _agregar_variantes(conn, producto_id: int, variantes: list[tuple[str, float]]) -> None:
-    """Inserta las variantes de un producto (a partir de pares nombre/precio)."""
-    conn.executemany(
-        "INSERT INTO producto_variantes (producto_id, nombre, precio) VALUES (?, ?, ?)",
-        [(producto_id, nombre, precio) for nombre, precio in variantes],
-    )
-
-
 def _cargar_variantes(productos: list[Producto], conn) -> None:
     """Asigna las variantes de cada producto de la lista en una sola consulta."""
     if not productos:
@@ -69,11 +78,10 @@ def _cargar_variantes(productos: list[Producto], conn) -> None:
     ids = [p.id for p in productos]
     placeholders = ",".join("?" * len(ids))
     cursor = conn.execute(
-        f"SELECT id, producto_id, nombre, precio FROM producto_variantes "
-        f"WHERE producto_id IN ({placeholders}) ORDER BY id",
+        f"SELECT id, producto_id, grupo, nombre, precio FROM producto_variantes "
+        f"WHERE producto_id IN ({placeholders}) ORDER BY grupo, id",
         ids,
     )
-    # mapa de variantes agrupadas por producto
     agrupadas: dict[int, list[ProductoVariante]] = {}
     for fila in cursor.fetchall():
         agrupadas.setdefault(fila["producto_id"], []).append(
@@ -82,6 +90,7 @@ def _cargar_variantes(productos: list[Producto], conn) -> None:
                 producto_id=fila["producto_id"],
                 nombre=fila["nombre"],
                 precio=float(fila["precio"]),
+                grupo=int(fila["grupo"]),
             )
         )
     for p in productos:
@@ -91,8 +100,8 @@ def _cargar_variantes(productos: list[Producto], conn) -> None:
 def _variantes_de(producto_id: int, conn) -> list[ProductoVariante]:
     """Devuelve las variantes de un producto."""
     cursor = conn.execute(
-        "SELECT id, producto_id, nombre, precio FROM producto_variantes "
-        "WHERE producto_id = ? ORDER BY id",
+        "SELECT id, producto_id, grupo, nombre, precio FROM producto_variantes "
+        "WHERE producto_id = ? ORDER BY grupo, id",
         (producto_id,),
     )
     return [
@@ -101,6 +110,7 @@ def _variantes_de(producto_id: int, conn) -> list[ProductoVariante]:
             producto_id=fila["producto_id"],
             nombre=fila["nombre"],
             precio=float(fila["precio"]),
+            grupo=int(fila["grupo"]),
         )
         for fila in cursor.fetchall()
     ]

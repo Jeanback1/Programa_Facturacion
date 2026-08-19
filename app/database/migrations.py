@@ -28,6 +28,11 @@ def run_migrations() -> None:
             conn.execute("ALTER TABLE facturas ADD COLUMN detalle TEXT")
         if "direccion" not in columnas:
             conn.execute("ALTER TABLE facturas ADD COLUMN direccion TEXT")
+        # Migración de variantes: añade la columna 'grupo' si la tabla ya existía
+        # sin ella (defensa para bases creadas antes de esta versión).
+        columnas_variantes = {fila[1] for fila in conn.execute("PRAGMA table_info(producto_variantes)")}
+        if "grupo" not in columnas_variantes:
+            conn.execute("ALTER TABLE producto_variantes ADD COLUMN grupo INTEGER NOT NULL DEFAULT 2 CHECK(grupo IN (1, 2))")
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -63,11 +68,16 @@ def _crear_tabla_productos(conn) -> None:
 
 
 def _crear_tabla_producto_variantes(conn) -> None:
-    """Crea la tabla de variantes de producto si no existe."""
+    """Crea la tabla de variantes de producto si no existe.
+
+    grupo: 1 = guarnición (solo modifica el nombre, precio sin uso),
+           2 = comer aquí / llevar (nombre + precio).
+    """
     conn.execute("""
         CREATE TABLE IF NOT EXISTS producto_variantes (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+            grupo       INTEGER NOT NULL DEFAULT 2 CHECK(grupo IN (1, 2)),
             nombre      TEXT    NOT NULL,
             precio      REAL    NOT NULL CHECK(precio >= 0)
         )

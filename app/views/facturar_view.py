@@ -24,9 +24,9 @@ class FacturarView(ctk.CTkFrame):
         master.minsize(800, 500)
         master.resizable(True, True)
 
-        # Estado de la factura actual: {(producto_id, variante_id): {nombre, precio_unitario, cantidad,...}}
-        # variante_id es None para productos sin variantes.
-        self._items: dict[tuple[int, int | None], dict] = {}
+        # Estado de la factura actual: {(producto_id, guarnicion_id, comer_llevar_id): {...}}
+        # Los ids de variante son None cuando el grupo no se eligió / no existe.
+        self._items: dict[tuple, dict] = {}
         self._total: float = 0.0
 
         # Productos cargados desde la BD (se usan para filtrar en búsqueda)
@@ -338,15 +338,15 @@ class FacturarView(ctk.CTkFrame):
             justify="center",
         ).grid(row=0, column=0, padx=8, pady=(10, 4), sticky="nsew")
 
-        # El botón "Agregar" abre el popup de variantes si el producto las tiene;
+        # El botón "Agregar" abre la cascada de variantes si el producto las tiene;
         # de lo contrario agrega directo con el azul por defecto de CTk.
-        if producto.variantes:
+        if producto.tiene_variantes:
             texto_boton = "Elegir opción"
             accion = lambda p=producto: self._abrir_popup_variantes(p)
             fg_color = ThemeManager().color("success")
         else:
             texto_boton = "Agregar"
-            accion = lambda p=producto: self._agregar_a_factura(p)
+            accion = lambda p=producto: self._agregar_a_factura_completo(p)
             fg_color = None  # None = color por defecto del tema (azul en CTk)
 
         ctk.CTkButton(
@@ -375,14 +375,52 @@ class FacturarView(ctk.CTkFrame):
     # ── Factura ─────────────────────────────────────────────────────────────────
 
     def _abrir_popup_variantes(self, producto: Producto) -> None:
-        """Muestra un popup para elegir una variante antes de agregar el producto."""
+        """Inicia la cascada de variantes del producto (guarnición → comer/llevar)."""
+        self._preguntar_guarnicion(producto)
+
+    def _preguntar_guarnicion(self, producto: Producto, guarnicion=None) -> None:
+        """Si el producto tiene guarniciones, muestra su popup y encadena el siguiente paso."""
+        if producto.guarniciones:
+            self._mostrar_popup_grupo(
+                producto,
+                opciones=producto.guarniciones,
+                titulo="¿Qué guarnición?",
+                instruccion="Elija la guarnición:",
+                al_elegir=lambda opc: self._preguntar_comer_llevar(producto, opc),
+            )
+        else:
+            self._preguntar_comer_llevar(producto, guarnicion)
+
+    def _preguntar_comer_llevar(self, producto: Producto, guarnicion=None) -> None:
+        """Si el producto tiene comer/llevar, muestra su popup; si no, agrega directo."""
+        if producto.comer_llevar:
+            self._mostrar_popup_grupo(
+                producto,
+                opciones=producto.comer_llevar,
+                titulo="Comer aquí o llevar",
+                instruccion="Elija la forma de entrega:",
+                al_elegir=lambda opc: self._agregar_a_factura_completo(producto, guarnicion, opc),
+            )
+        else:
+            self._agregar_a_factura_completo(producto, guarnicion)
+
+    def _mostrar_popup_grupo(
+        self,
+        producto: Producto,
+        *,
+        opciones: list,
+        titulo: str,
+        instruccion: str,
+        al_elegir,
+    ) -> None:
+        """Muestra un popup modal con un botón por opción de un grupo de variantes."""
         raiz = self.winfo_toplevel()
         popup = ctk.CTkToplevel(raiz)
-        popup.title("Elegir variante")
+        popup.title(titulo)
         popup.resizable(False, False)
         popup.transient(raiz)
 
-        ancho, alto = 320, 200
+        ancho, alto = 360, 120 + len(opciones) * 44
         raiz.update_idletasks()
         x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
         y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
@@ -393,49 +431,57 @@ class FacturarView(ctk.CTkFrame):
             popup,
             text=producto.nombre,
             font=ctk.CTkFont(size=14, weight="bold"),
-            wraplength=280,
+            wraplength=320,
             justify="center",
-        ).pack(pady=(20, 4), padx=16)
+        ).pack(pady=(16, 2), padx=16)
 
         ctk.CTkLabel(
             popup,
-            text="Elija la variante:",
+            text=instruccion,
             font=ctk.CTkFont(size=12),
             text_color="gray",
-        ).pack(pady=(0, 10))
+        ).pack(pady=(0, 8))
 
         frame_btns = ctk.CTkFrame(popup, fg_color="transparent")
         frame_btns.pack()
 
-        def _elegir(variante) -> None:
-            popup.destroy()
-            self._agregar_a_factura(producto, variante)
-
-        for v in producto.variantes:
+        for v in opciones:
             ctk.CTkButton(
                 frame_btns,
-                text=f"{v.nombre} — ${v.precio:,.0f}",
-                width=250,
+                text=f"{v.nombre}",
+                width=300,
                 height=34,
                 font=ctk.CTkFont(size=13),
-                command=lambda var=v: _elegir(var),
+                command=lambda var=v: (popup.destroy(), al_elegir(var)),
             ).pack(pady=3)
 
         popup.bind("<Escape>", lambda _e: popup.destroy())
 
-    def _clave(self, producto: Producto, variante) -> tuple[int, int | None]:
-        """Clave compuesta de un ítem en la factura: (producto_id, variante_id)."""
-        return (producto.id, variante.id if variante is not None else None)
+    def _agregar_a_factura_completo(self, producto: Producto, guarnicion=None, comer_llevar=None) -> None:
+        """Añade el producto combinando guarnición (nombre) y comer/llevar (precio)."""
+        # Nombre: base + guarnición + comer/llevar
+        partes = [producto.nombre]
+        if guarnicion is not None:
+            partes.append(f"({guarnicion.nombre})")
+        if comer_llevar is not None:
+            partes.append(f"({comer_llevar.nombre})")
+        nombre = " ".join(partes)
 
-    def _agregar_a_factura(self, producto: Producto, variante=None) -> None:
-        """Agrega el producto (o su variante) a la factura o incrementa su cantidad.
+        # Precio: el de comer/llevar si se eligió (reemplaza el base), si no el base.
+        precio = comer_llevar.precio if comer_llevar is not None else producto.precio
+        self._agregar_a_factura(producto, nombre, precio, {
+            "guarnicion_id": guarnicion.id if guarnicion is not None else None,
+            "comer_llevar_id": comer_llevar.id if comer_llevar is not None else None,
+        })
 
-        Si variante no es None, el ítem usa el nombre y precio de ESA variante,
-        y se trata como un ítem distinto del producto base (clave compuesta).
-        """
-        clave = self._clave(producto, variante)
-        nombre = variante.nombre if variante is not None else producto.nombre
-        precio = variante.precio if variante is not None else producto.precio
+    def _clave(self, producto_id: int, ids: dict) -> tuple:
+        """Clave compuesta de un ítem: (producto_id, guarnicion_id|None, comer_llevar_id|None)."""
+        return (producto_id, ids.get("guarnicion_id"), ids.get("comer_llevar_id"))
+
+    def _agregar_a_factura(self, producto: Producto, nombre: str, precio: float, ids: dict) -> None:
+        """Agrega una línea a la factura (con su nombre/precio final) o incrementa cantidad."""
+        pid = producto.id
+        clave = self._clave(pid, ids)
 
         if clave in self._items:
             self._items[clave]["cantidad"] += 1
@@ -468,17 +514,17 @@ class FacturarView(ctk.CTkFrame):
             lbl_cantidad = ctk.CTkLabel(
                 item_frame,
                 text="1",
-                font=ctk.CTkFont(size=fs, weight="bold"),
-                width=int(40 * fs / 14),
+                font=ctk.CTkFont(size=fs if (fs := self._item_font_size) else fs),
+                width=int(40 * self._item_font_size / 14),
             )
             lbl_cantidad.grid(row=0, column=0, padx=(8, 0), pady=4, sticky="w")
 
             ctk.CTkButton(
                 item_frame,
                 text="+",
-                width=int(24 * fs / 14),
-                height=int(24 * fs / 14),
-                font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
+                width=int(24 * self._item_font_size / 14),
+                height=int(24 * self._item_font_size / 14),
+                font=ctk.CTkFont(size=max(10, self._item_font_size - 2), weight="bold"),
                 fg_color="transparent",
                 border_width=1,
                 text_color=ThemeManager().color("transparent_btn_text"),
@@ -488,15 +534,15 @@ class FacturarView(ctk.CTkFrame):
             ctk.CTkLabel(
                 item_frame,
                 text=nombre,
-                font=ctk.CTkFont(size=fs),
+                font=ctk.CTkFont(size=self._item_font_size),
                 anchor="w",
             ).grid(row=0, column=2, padx=4, pady=4, sticky="ew")
 
             lbl_precio = ctk.CTkLabel(
                 item_frame,
                 text=f"${precio:,.0f}",
-                font=ctk.CTkFont(size=fs, weight="bold"),
-                width=int(80 * fs / 14),
+                font=ctk.CTkFont(size=self._item_font_size, weight="bold"),
+                width=int(80 * self._item_font_size / 14),
                 anchor="e",
             )
             lbl_precio.grid(row=0, column=3, padx=8, pady=4, sticky="e")
@@ -504,9 +550,9 @@ class FacturarView(ctk.CTkFrame):
             ctk.CTkButton(
                 item_frame,
                 text="×",
-                width=int(24 * fs / 14),
-                height=int(24 * fs / 14),
-                font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
+                width=int(24 * self._item_font_size / 14),
+                height=int(24 * self._item_font_size / 14),
+                font=ctk.CTkFont(size=max(10, self._item_font_size - 2), weight="bold"),
                 fg_color=ThemeManager().color("danger_bg"),
                 hover_color=ThemeManager().color("danger_hover"),
                 command=lambda k=clave: self._eliminar_item(k),
@@ -524,7 +570,7 @@ class FacturarView(ctk.CTkFrame):
         self._total += precio
         self._label_total.configure(text=f"${self._total:,.0f}")
 
-    def _eliminar_item(self, clave: tuple[int, int | None]) -> None:
+    def _eliminar_item(self, clave: tuple) -> None:
         """Elimina un ítem de la factura y actualiza el total."""
         item = self._items.pop(clave)
         self._total -= item["precio_unitario"] * item["cantidad"]

@@ -3,18 +3,24 @@
 
 from dataclasses import dataclass, field
 
+# Constantes de grupos de variante
+GRUPO_GUARNICION = 1   # solo modifica el nombre; sin efecto en precio
+GRUPO_COMER_LLEVAR = 2  # nombre + precio (reemplaza el precio base)
+
 
 @dataclass
 class ProductoVariante:
-    """Variante opcional de un producto (ej. "Para llevar" / "Para comer aquí").
+    """Variante de un producto.
 
-    Un producto "tiene variantes" si su lista de variantes no está vacía.
+    grupo: GRUPO_GUARNICION (1) = guarnición, solo altera el nombre.
+           GRUPO_COMER_LLEVAR (2) = comer aquí / llevar, altera nombre y precio.
     """
 
     id: int
     producto_id: int
     nombre: str
     precio: float
+    grupo: int = GRUPO_COMER_LLEVAR
 
 
 @dataclass
@@ -25,3 +31,18 @@ class Producto:
     nombre: str
     precio: float
     variantes: list[ProductoVariante] = field(default_factory=list)
+
+    @property
+    def guarniciones(self) -> list[ProductoVariante]:
+        """Variantes de grupo 1 (solo nombre)."""
+        return [v for v in self.variantes if v.grupo == GRUPO_GUARNICION]
+
+    @property
+    def comer_llevar(self) -> list[ProductoVariante]:
+        """Variantes de grupo 2 (nombre + precio)."""
+        return [v for v in self.variantes if v.grupo == GRUPO_COMER_LLEVAR]
+
+    @property
+    def tiene_variantes(self) -> bool:
+        """True si el producto define alguna variante (de cualquier grupo)."""
+        return bool(self.variantes)
