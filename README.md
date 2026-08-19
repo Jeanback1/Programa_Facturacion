@@ -2,6 +2,9 @@
 
 Aplicación de escritorio para gestión de facturación, construida con Python, CustomTkinter y SQLite.
 
+> Para agentes de IA: consultar **`AGENT.md`** (arquitectura, patrón de
+> repositorios, manejo del grafo de código `codebase-memory`).
+
 ## Stack
 
 - **GUI**: CustomTkinter (tema oscuro)
