@@ -339,7 +339,7 @@ class FacturarView(ctk.CTkFrame):
         ).grid(row=0, column=0, padx=8, pady=(10, 4), sticky="nsew")
 
         # El botón "Agregar" abre el popup de variantes si el producto las tiene;
-        # de lo contrario agrega directo como siempre.
+        # de lo contrario agrega directo con el azul por defecto de CTk.
         if producto.variantes:
             texto_boton = "Elegir opción"
             accion = lambda p=producto: self._abrir_popup_variantes(p)
@@ -347,7 +347,7 @@ class FacturarView(ctk.CTkFrame):
         else:
             texto_boton = "Agregar"
             accion = lambda p=producto: self._agregar_a_factura(p)
-            fg_color = "transparent"
+            fg_color = None  # None = color por defecto del tema (azul en CTk)
 
         ctk.CTkButton(
             tarjeta,
