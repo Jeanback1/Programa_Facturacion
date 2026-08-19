@@ -1,11 +1,30 @@
 # -*- coding: utf-8 -*-
 """Módulo de impresión de recibos en impresoras térmicas ESC/POS (Epson TM-T20II)."""
 
+import os
+import sys
 import textwrap
 
 from app.models.factura import Factura
 
 _LINE_WIDTH = 42  # caracteres por línea en papel 80 mm con fuente estándar A
+
+
+def _asegurar_capabilities() -> None:
+    """Workaround de empaquetado para python-escpos 3.x con PyInstaller.
+
+    En ejecutables onefile/frozen, escpos intenta localizar capabilities.json
+    vía importlib_resources.files(), que en modo congelado devuelve una ruta
+    incorrecta (escpos\\capabilities\\capabilities.json). Esto lanza
+    FileNotFoundError al imprimir. escpos respeta la variable de entorno
+    ESCPOS_CAPABILITIES_FILE: si la definimos apuntando al archivo empaquetado
+    en _MEIPASS, se usa esa ruta y se evita el bug. (Ver pyinstaller#8659.)
+    """
+    if getattr(sys, "frozen", False) and "ESCPOS_CAPABILITIES_FILE" not in os.environ:
+        _meipass = getattr(sys, "_MEIPASS", "")
+        ruta = os.path.join(_meipass, "escpos", "capabilities.json")
+        if os.path.isfile(ruta):
+            os.environ["ESCPOS_CAPABILITIES_FILE"] = ruta
 
 
 def imprimir_recibo(
@@ -21,6 +40,7 @@ def imprimir_recibo(
 
     Raises RuntimeError si la impresora no está configurada o no es accesible.
     """
+    _asegurar_capabilities()
     from escpos.printer import Win32Raw
 
     nombre_impresora = config.get("impresora_nombre", "").strip()
@@ -170,6 +190,7 @@ def imprimir_cuadre(
 
     Raises RuntimeError si la impresora no está configurada o no es accesible.
     """
+    _asegurar_capabilities()
     from escpos.printer import Win32Raw
 
     nombre_impresora = config.get("impresora_nombre", "").strip()
