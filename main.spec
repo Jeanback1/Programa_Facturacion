@@ -1,9 +1,24 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 from PyInstaller.utils.hooks import collect_data_files
 
-# Incluye capabilities.json y cualquier otro dato de python-escpos
-# y los temas/assets de customtkinter (necesario para que la UI cargue)
-datas = collect_data_files('escpos') + collect_data_files('customtkinter')
+# ── Datos de python-escpos y customtkinter ─────────────────────────────────────
+# collect_data_files('escpos') recoge capabilities.json; además lo forzamos
+# explícito por ruta, por si en otra versión de escpos el hook se comporta
+# distinto (defensa contra el error "No such file: escpos/capabilities.json").
+datas  = collect_data_files('escpos')
+datas += collect_data_files('customtkinter')
+
+try:
+    import escpos
+    _escpos_dir = os.path.dirname(escpos.__file__)
+    _capabilities = os.path.join(_escpos_dir, 'capabilities.json')
+    if os.path.isfile(_capabilities):
+        # (origen, destino_en_el_EXE) → destino 'escpos' lo coloca en
+        # _MEIPASS/escpos/capabilities.json que es donde escpos lo busca.
+        datas.append((_capabilities, 'escpos'))
+except Exception:
+    pass
 
 a = Analysis(
     ['main.py'],
