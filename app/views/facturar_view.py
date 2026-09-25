@@ -1,0 +1,967 @@
+# -*- coding: utf-8 -*-
+"""Vista de facturación — catálogo de productos y lista de la factura actual."""
+
+from collections.abc import Callable
+
+import customtkinter as ctk
+
+from app.models.producto import Producto
+from app.printing import impresora
+from app.repositories import configuracion_repo, factura_item_repo, factura_repo, producto_repo
+from app.session import Session
+from app.theme import ThemeManager
+
+
+class FacturarView(ctk.CTkFrame):
+    """Frame de facturación con catálogo de productos y lista de la factura actual."""
+
+    def __init__(self, master: ctk.CTk, navigate: Callable[[str], None]) -> None:
+        super().__init__(master, fg_color="transparent")
+        self._navigate = navigate
+
+        master.title("Facturación — Facturar")
+        master.geometry("1100x680")
+        master.minsize(800, 500)
+        master.resizable(True, True)
+
+        # Estado de la factura actual: {(producto_id, guarnicion_id, comer_llevar_id): {...}}
+        # Los ids de variante son None cuando el grupo no se eligió / no existe.
+        self._items: dict[tuple, dict] = {}
+        self._total: float = 0.0
+
+        # Productos cargados desde la BD (se usan para filtrar en búsqueda)
+        self._todos_productos: list[Producto] = producto_repo.listar_todos()
+
+        # Tamaños ajustables del catálogo
+        self._card_width: int = 150
+        self._card_height: int = 100
+        self._card_gap: int = 8
+
+        # Tamaños ajustables de los ítems de la factura
+        self._item_height: int = 50
+        self._item_font_size: int = 14
+
+        # Estado de la cuadrícula del catálogo
+        self._productos_actuales: list[Producto] = []
+        self._num_columnas: int = 3          # default seguro; se corrige al primer <Configure>
+        self._reflow_job: str | None = None  # handle de debounce para resize
+
+        self._construir_ui()
+        self._renderizar_catalogo(self._todos_productos)
+
+    def _construir_ui(self) -> None:
+        """Construye todos los widgets de la pantalla de facturación."""
+
+        # ── Header ─────────────────────────────────────────────────
+        header = ctk.CTkFrame(self, height=56, corner_radius=0)
+        header.pack(fill="x", side="top")
+        header.pack_propagate(False)
+
+        ctk.CTkButton(
+            header,
+            text="←",
+            width=48,
+            height=36,
+            fg_color="transparent",
+            border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
+            font=ctk.CTkFont(size=18),
+            command=self._volver_a_home,
+        ).pack(side="left", padx=16, pady=10)
+
+        # ── Barra de búsqueda (ancho completo) ─────────────────────
+        frame_busqueda = ctk.CTkFrame(self, fg_color="transparent")
+        frame_busqueda.pack(fill="x", padx=16, pady=(10, 6))
+
+        self._campo_busqueda = ctk.CTkEntry(
+            frame_busqueda,
+            placeholder_text="Buscar por nombre o #id...",
+            height=40,
+            font=ctk.CTkFont(size=14),
+        )
+        self._campo_busqueda.pack(fill="x", expand=True)
+        self._campo_busqueda.bind("<KeyRelease>", lambda _event: self._buscar_producto())
+
+        # ── Área de dos columnas ────────────────────────────────────
+        area_columnas = ctk.CTkFrame(self, fg_color="transparent")
+        area_columnas.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+
+        area_columnas.grid_columnconfigure(0, weight=7)
+        area_columnas.grid_columnconfigure(1, weight=3)
+        area_columnas.grid_rowconfigure(0, weight=1)
+
+        # ── Columna izquierda — Catálogo ────────────────────────────
+        col_izquierda = ctk.CTkFrame(area_columnas, fg_color="transparent")
+        col_izquierda.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        col_izquierda.grid_rowconfigure(0, weight=0)
+        col_izquierda.grid_rowconfigure(1, weight=1)
+        col_izquierda.grid_columnconfigure(0, weight=1)
+
+        header_cat = ctk.CTkFrame(col_izquierda, height=32, fg_color="transparent")
+        header_cat.grid(row=0, column=0, sticky="ew", pady=(0, 2))
+        header_cat.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            header_cat,
+            text="Catálogo",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=0, column=0, padx=(4, 0), sticky="w")
+
+        ctk.CTkButton(
+            header_cat,
+            text="−",
+            width=24, height=24,
+            fg_color="transparent",
+            border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._reducir_catalogo,
+        ).grid(row=0, column=2, padx=(0, 2))
+
+        ctk.CTkButton(
+            header_cat,
+            text="+",
+            width=24, height=24,
+            fg_color="transparent",
+            border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._aumentar_catalogo,
+        ).grid(row=0, column=3, padx=(0, 4))
+
+        self._frame_catalogo = ctk.CTkScrollableFrame(col_izquierda)
+        self._frame_catalogo.grid(row=1, column=0, sticky="nsew")
+        self._frame_catalogo._parent_canvas.bind(
+            "<Configure>",
+            self._on_catalogo_resize,
+            add="+",
+        )
+
+        # ── Columna derecha — Lista de la factura ───────────────────
+        col_derecha = ctk.CTkFrame(area_columnas)
+        col_derecha.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        col_derecha.grid_rowconfigure(0, weight=0)
+        col_derecha.grid_rowconfigure(1, weight=1)
+        col_derecha.grid_columnconfigure(0, weight=1)
+
+        header_fac = ctk.CTkFrame(col_derecha, height=32, fg_color="transparent")
+        header_fac.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 2))
+        header_fac.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            header_fac,
+            text="Factura actual",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=0, column=0, padx=(4, 0), sticky="w")
+
+        ctk.CTkButton(
+            header_fac,
+            text="−",
+            width=24, height=24,
+            fg_color="transparent",
+            border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._reducir_factura,
+        ).grid(row=0, column=2, padx=(0, 2))
+
+        ctk.CTkButton(
+            header_fac,
+            text="+",
+            width=24, height=24,
+            fg_color="transparent",
+            border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._aumentar_factura,
+        ).grid(row=0, column=3, padx=(0, 4))
+
+        self._frame_factura = ctk.CTkScrollableFrame(col_derecha)
+        self._frame_factura.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 4))
+
+        # Placeholder visible cuando la factura está vacía
+        self._placeholder_factura = ctk.CTkLabel(
+            self._frame_factura,
+            text="Sin productos aún",
+            text_color="gray",
+            font=ctk.CTkFont(size=13),
+        )
+        self._placeholder_factura.pack(pady=24)
+
+        # ── Total ───────────────────────────────────────────────────
+        frame_total = ctk.CTkFrame(col_derecha, fg_color="transparent")
+        frame_total.grid(row=2, column=0, sticky="ew", padx=8, pady=(2, 2))
+
+        ctk.CTkLabel(
+            frame_total,
+            text="Total:",
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(side="left", padx=12)
+
+        self._label_total = ctk.CTkLabel(
+            frame_total,
+            text="$0",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=ThemeManager().color("success"),
+        )
+        self._label_total.pack(side="right", padx=12)
+
+        # ── Botones inferiores ──────────────────────────────────────
+        frame_botones = ctk.CTkFrame(col_derecha, fg_color="transparent")
+        frame_botones.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 10))
+        frame_botones.grid_columnconfigure(0, weight=1)
+        frame_botones.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            frame_botones,
+            text="Imprimir",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            height=44,
+            command=self.imprimir_factura,
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
+
+        ctk.CTkButton(
+            frame_botones,
+            text="Eliminar",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            height=44,
+            fg_color=ThemeManager().color("danger_bg"),
+            hover_color=ThemeManager().color("danger_hover"),
+            command=self._limpiar_factura,
+        ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
+
+        # ── Dirección del cliente ───────────────────────────────────
+        frame_direccion = ctk.CTkFrame(col_derecha, fg_color="transparent")
+        frame_direccion.grid(row=4, column=0, sticky="ew", padx=8, pady=(0, 8))
+
+        ctk.CTkLabel(
+            frame_direccion,
+            text="Dirección:",
+            font=ctk.CTkFont(size=13),
+        ).pack(anchor="w", padx=4)
+
+        self._entry_direccion = ctk.CTkEntry(
+            frame_direccion,
+            placeholder_text="Dirección del cliente...",
+            height=36,
+        )
+        self._entry_direccion.pack(fill="x", padx=4)
+
+        # ── Detalle de la factura ───────────────────────────────────
+        frame_detalle = ctk.CTkFrame(col_derecha, fg_color="transparent")
+        frame_detalle.grid(row=5, column=0, sticky="ew", padx=8, pady=(0, 8))
+
+        ctk.CTkLabel(
+            frame_detalle,
+            text="Detalle:",
+            font=ctk.CTkFont(size=13),
+        ).pack(anchor="w", padx=4)
+
+        self._entry_detalle = ctk.CTkEntry(
+            frame_detalle,
+            placeholder_text="Nota opcional...",
+            height=36,
+        )
+        self._entry_detalle.pack(fill="x", padx=4)
+
+    # ── Catálogo ────────────────────────────────────────────────────────────────
+
+    def _on_catalogo_resize(self, event: object) -> None:
+        """Debounce del evento <Configure> del canvas del catálogo."""
+        if self._reflow_job is not None:
+            self.after_cancel(self._reflow_job)
+        self._reflow_job = self.after(120, lambda: self._reflow_grid(event.width))
+
+    def _reflow_grid(self, canvas_width: int) -> None:
+        """Recalcula columnas y re-renderiza el catálogo si el número cambió."""
+        self._reflow_job = None
+        cols = max(1, canvas_width // (self._card_width + self._card_gap))
+        if cols != self._num_columnas:
+            self._num_columnas = cols
+            self._renderizar_catalogo(self._productos_actuales)
+
+    def _renderizar_catalogo(self, productos: list[Producto]) -> None:
+        """Limpia el catálogo y lo re-renderiza con la lista de productos dada."""
+        self._productos_actuales = productos
+
+        for widget in self._frame_catalogo.winfo_children():
+            widget.destroy()
+
+        if not productos:
+            ctk.CTkLabel(
+                self._frame_catalogo,
+                text="No se encontraron productos",
+                text_color="gray",
+                font=ctk.CTkFont(size=13),
+            ).pack(pady=24)
+            return
+
+        cols = self._num_columnas
+
+        # Limpiar columnas sobrantes de un layout anterior más ancho
+        for c in range(cols, cols + 10):
+            self._frame_catalogo.grid_columnconfigure(c, weight=0, minsize=0)
+        for c in range(cols):
+            self._frame_catalogo.grid_columnconfigure(c, weight=1, minsize=self._card_width)
+
+        for idx, producto in enumerate(productos):
+            self._crear_tarjeta_producto(producto, row=idx // cols, col=idx % cols)
+
+    def _crear_tarjeta_producto(self, producto: Producto, *, row: int, col: int) -> None:
+        """Crea una tarjeta de producto cuadrada en la posición (row, col) del grid."""
+        font_size = max(9, round(12 * self._card_width / 150))
+        tarjeta = ctk.CTkFrame(
+            self._frame_catalogo,
+            width=self._card_width,
+            height=self._card_height,
+            corner_radius=8,
+            border_width=2,
+            border_color=ThemeManager().color("border"),
+        )
+        tarjeta.grid(
+            row=row, column=col,
+            padx=self._card_gap // 2, pady=self._card_gap // 2,
+            sticky="n",
+        )
+        tarjeta.grid_propagate(False)
+
+        tarjeta.grid_rowconfigure(0, weight=1)   # área del nombre+id: crece
+        tarjeta.grid_rowconfigure(1, weight=0)   # botón: altura fija
+        tarjeta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"#{producto.id} - {producto.nombre}",
+            font=ctk.CTkFont(size=font_size, weight="bold"),
+            wraplength=self._card_width - 16,
+            anchor="center",
+            justify="center",
+        ).grid(row=0, column=0, padx=8, pady=(10, 4), sticky="nsew")
+
+        # El botón "Agregar" abre la cascada de variantes si el producto las tiene;
+        # de lo contrario agrega directo con el azul por defecto de CTk.
+        if producto.tiene_variantes:
+            texto_boton = "Elegir opción"
+            accion = lambda p=producto: self._abrir_popup_variantes(p)
+            fg_color = ThemeManager().color("success")
+        else:
+            texto_boton = "Agregar"
+            accion = lambda p=producto: self._agregar_a_factura_completo(p)
+            fg_color = None  # None = color por defecto del tema (azul en CTk)
+
+        ctk.CTkButton(
+            tarjeta,
+            text=texto_boton,
+            width=self._card_width - 24,
+            height=30,
+            fg_color=fg_color,
+            font=ctk.CTkFont(size=font_size),
+            command=accion,
+        ).grid(row=1, column=0, padx=12, pady=(0, 10))
+
+    def _buscar_producto(self) -> None:
+        """Filtra el catálogo por nombre o por id (soporta prefijo #)."""
+        termino = self._campo_busqueda.get().strip().lower()
+        if termino:
+            id_termino = termino.lstrip("#").strip()
+            filtrados = [
+                p for p in self._todos_productos
+                if termino in p.nombre.lower() or id_termino in str(p.id)
+            ]
+        else:
+            filtrados = self._todos_productos
+        self._renderizar_catalogo(filtrados)
+
+    # ── Factura ─────────────────────────────────────────────────────────────────
+
+    def _abrir_popup_variantes(self, producto: Producto) -> None:
+        """Inicia la cascada de variantes del producto (guarnición → comer/llevar)."""
+        self._preguntar_guarnicion(producto)
+
+    def _preguntar_guarnicion(self, producto: Producto, guarnicion=None) -> None:
+        """Si el producto tiene guarniciones, muestra su popup y encadena el siguiente paso."""
+        if producto.guarniciones:
+            self._mostrar_popup_grupo(
+                producto,
+                opciones=producto.guarniciones,
+                titulo="¿Qué guarnición?",
+                instruccion="Elija la guarnición:",
+                al_elegir=lambda opc: self._preguntar_comer_llevar(producto, opc),
+            )
+        else:
+            self._preguntar_comer_llevar(producto, guarnicion)
+
+    def _preguntar_comer_llevar(self, producto: Producto, guarnicion=None) -> None:
+        """Si el producto tiene comer/llevar, muestra su popup; si no, agrega directo."""
+        if producto.comer_llevar:
+            self._mostrar_popup_grupo(
+                producto,
+                opciones=producto.comer_llevar,
+                titulo="Comer aquí o llevar",
+                instruccion="Elija la forma de entrega:",
+                al_elegir=lambda opc: self._agregar_a_factura_completo(producto, guarnicion, opc),
+            )
+        else:
+            self._agregar_a_factura_completo(producto, guarnicion)
+
+    def _mostrar_popup_grupo(
+        self,
+        producto: Producto,
+        *,
+        opciones: list,
+        titulo: str,
+        instruccion: str,
+        al_elegir,
+    ) -> None:
+        """Muestra un popup modal con un botón por opción de un grupo de variantes."""
+        raiz = self.winfo_toplevel()
+        popup = ctk.CTkToplevel(raiz)
+        popup.title(titulo)
+        popup.resizable(False, False)
+        popup.transient(raiz)
+
+        ancho, alto = 360, 120 + len(opciones) * 44
+        raiz.update_idletasks()
+        x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
+        popup.geometry(f"{ancho}x{alto}+{x}+{y}")
+        popup.after(50, popup.grab_set)
+
+        ctk.CTkLabel(
+            popup,
+            text=producto.nombre,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            wraplength=320,
+            justify="center",
+        ).pack(pady=(16, 2), padx=16)
+
+        ctk.CTkLabel(
+            popup,
+            text=instruccion,
+            font=ctk.CTkFont(size=12),
+            text_color="gray",
+        ).pack(pady=(0, 8))
+
+        frame_btns = ctk.CTkFrame(popup, fg_color="transparent")
+        frame_btns.pack()
+
+        for v in opciones:
+            ctk.CTkButton(
+                frame_btns,
+                text=f"{v.nombre}",
+                width=300,
+                height=34,
+                font=ctk.CTkFont(size=13),
+                command=lambda var=v: (popup.destroy(), al_elegir(var)),
+            ).pack(pady=3)
+
+        popup.bind("<Escape>", lambda _e: popup.destroy())
+
+    def _agregar_a_factura_completo(self, producto: Producto, guarnicion=None, comer_llevar=None) -> None:
+        """Añade el producto combinando guarnición (nombre) y comer/llevar (precio)."""
+        # Nombre: base + guarnición + comer/llevar
+        partes = [producto.nombre]
+        if guarnicion is not None:
+            partes.append(f"({guarnicion.nombre})")
+        if comer_llevar is not None:
+            partes.append(f"({comer_llevar.nombre})")
+        nombre = " ".join(partes)
+
+        # Precio: el de comer/llevar si se eligió (reemplaza el base), si no el base.
+        precio = comer_llevar.precio if comer_llevar is not None else producto.precio
+        self._agregar_a_factura(producto, nombre, precio, {
+            "guarnicion_id": guarnicion.id if guarnicion is not None else None,
+            "comer_llevar_id": comer_llevar.id if comer_llevar is not None else None,
+        })
+
+    def _clave(self, producto_id: int, ids: dict) -> tuple:
+        """Clave compuesta de un ítem: (producto_id, guarnicion_id|None, comer_llevar_id|None)."""
+        return (producto_id, ids.get("guarnicion_id"), ids.get("comer_llevar_id"))
+
+    def _agregar_a_factura(self, producto: Producto, nombre: str, precio: float, ids: dict) -> None:
+        """Agrega una línea a la factura (con su nombre/precio final) o incrementa cantidad."""
+        pid = producto.id
+        clave = self._clave(pid, ids)
+
+        if clave in self._items:
+            self._items[clave]["cantidad"] += 1
+            item = self._items[clave]
+            item["lbl_cantidad"].configure(text=f"{item['cantidad']:g}")
+            total = item["precio_unitario"] * item["cantidad"]
+            item["lbl_precio"].configure(text=f"${total:,.0f}")
+        else:
+            # Ocultar el placeholder al agregar el primer ítem
+            if not self._items:
+                self._placeholder_factura.pack_forget()
+
+            fs = self._item_font_size
+            item_frame = ctk.CTkFrame(
+                self._frame_factura,
+                height=self._item_height,
+                border_width=1,
+                border_color=ThemeManager().color("border"),
+                corner_radius=6
+            )
+            item_frame.pack(fill="x", padx=8, pady=4)
+            item_frame.pack_propagate(False)
+
+            item_frame.grid_columnconfigure(0, weight=0)  # Cantidad
+            item_frame.grid_columnconfigure(1, weight=0)  # Botón +
+            item_frame.grid_columnconfigure(2, weight=1)  # Nombre
+            item_frame.grid_columnconfigure(3, weight=0)  # Precio
+            item_frame.grid_columnconfigure(4, weight=0)  # Botón ×
+
+            lbl_cantidad = ctk.CTkLabel(
+                item_frame,
+                text="1",
+                font=ctk.CTkFont(size=fs if (fs := self._item_font_size) else fs),
+                width=int(40 * self._item_font_size / 14),
+            )
+            lbl_cantidad.grid(row=0, column=0, padx=(8, 0), pady=4, sticky="w")
+
+            ctk.CTkButton(
+                item_frame,
+                text="+",
+                width=int(24 * self._item_font_size / 14),
+                height=int(24 * self._item_font_size / 14),
+                font=ctk.CTkFont(size=max(10, self._item_font_size - 2), weight="bold"),
+                fg_color="transparent",
+                border_width=1,
+                text_color=ThemeManager().color("transparent_btn_text"),
+                command=lambda k=clave: self._abrir_popup_cantidad(k),
+            ).grid(row=0, column=1, padx=4, pady=4)
+
+            ctk.CTkLabel(
+                item_frame,
+                text=nombre,
+                font=ctk.CTkFont(size=self._item_font_size),
+                anchor="w",
+            ).grid(row=0, column=2, padx=4, pady=4, sticky="ew")
+
+            lbl_precio = ctk.CTkLabel(
+                item_frame,
+                text=f"${precio:,.0f}",
+                font=ctk.CTkFont(size=self._item_font_size, weight="bold"),
+                width=int(80 * self._item_font_size / 14),
+                anchor="e",
+            )
+            lbl_precio.grid(row=0, column=3, padx=8, pady=4, sticky="e")
+
+            ctk.CTkButton(
+                item_frame,
+                text="×",
+                width=int(24 * self._item_font_size / 14),
+                height=int(24 * self._item_font_size / 14),
+                font=ctk.CTkFont(size=max(10, self._item_font_size - 2), weight="bold"),
+                fg_color=ThemeManager().color("danger_bg"),
+                hover_color=ThemeManager().color("danger_hover"),
+                command=lambda k=clave: self._eliminar_item(k),
+            ).grid(row=0, column=4, padx=(4, 8), pady=4)
+
+            self._items[clave] = {
+                "nombre": nombre,
+                "precio_unitario": precio,
+                "cantidad": 1,
+                "label": item_frame,
+                "lbl_cantidad": lbl_cantidad,
+                "lbl_precio": lbl_precio,
+            }
+
+        self._total += precio
+        self._label_total.configure(text=f"${self._total:,.0f}")
+
+    def _eliminar_item(self, clave: tuple) -> None:
+        """Elimina un ítem de la factura y actualiza el total."""
+        item = self._items.pop(clave)
+        self._total -= item["precio_unitario"] * item["cantidad"]
+        item["label"].destroy()
+
+        if not self._items:
+            self._total = 0.0
+            self._label_total.configure(text="$0")
+            self._placeholder_factura = ctk.CTkLabel(
+                self._frame_factura,
+                text="Sin productos aún",
+                text_color="gray",
+                font=ctk.CTkFont(size=13),
+            )
+            self._placeholder_factura.pack(pady=24)
+        else:
+            self._label_total.configure(text=f"${self._total:,.0f}")
+
+    def _abrir_popup_cantidad(self, clave: tuple[int, int | None]) -> None:
+        """Abre un popup para editar la cantidad y el precio unitario de un ítem."""
+        item = self._items[clave]
+        raiz = self.winfo_toplevel()
+
+        popup = ctk.CTkToplevel(raiz)
+        popup.title("Editar cantidad y precio")
+        popup.resizable(False, False)
+        popup.transient(raiz)
+
+        ancho, alto = 300, 230
+        raiz.update_idletasks()
+        x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
+        popup.geometry(f"{ancho}x{alto}+{x}+{y}")
+        popup.after(50, popup.grab_set)
+
+        ctk.CTkLabel(
+            popup,
+            text=item["nombre"],
+            font=ctk.CTkFont(size=13, weight="bold"),
+            wraplength=260,
+        ).pack(pady=(16, 6), padx=16)
+
+        ctk.CTkLabel(popup, text="Cantidad:", font=ctk.CTkFont(size=12), anchor="w").pack(
+            padx=16, fill="x"
+        )
+        entry_cantidad = ctk.CTkEntry(popup, width=200)
+        entry_cantidad.insert(0, f"{item['cantidad']:g}")
+        entry_cantidad.pack(pady=(2, 6), padx=16)
+        entry_cantidad.focus()
+
+        ctk.CTkLabel(popup, text="Precio unitario:", font=ctk.CTkFont(size=12), anchor="w").pack(
+            padx=16, fill="x"
+        )
+        entry_precio = ctk.CTkEntry(popup, width=200)
+        entry_precio.insert(0, f"{item['precio_unitario']:,.0f}")
+        entry_precio.pack(pady=(2, 4), padx=16)
+
+        lbl_error = ctk.CTkLabel(popup, text="", text_color=ThemeManager().color("error_text"), font=ctk.CTkFont(size=11))
+        lbl_error.pack()
+
+        def _confirmar() -> None:
+            try:
+                nueva_cantidad = float(entry_cantidad.get().replace(",", "."))
+            except ValueError:
+                lbl_error.configure(text="Cantidad inválida")
+                return
+            if nueva_cantidad <= 0:
+                lbl_error.configure(text="La cantidad debe ser mayor a 0")
+                return
+
+            try:
+                nuevo_precio = float(entry_precio.get().replace(",", "."))
+            except ValueError:
+                lbl_error.configure(text="Precio inválido")
+                return
+            if nuevo_precio <= 0:
+                lbl_error.configure(text="El precio debe ser mayor a 0")
+                return
+
+            anterior_subtotal = item["precio_unitario"] * item["cantidad"]
+            self._total -= anterior_subtotal
+
+            item["cantidad"] = nueva_cantidad
+            item["precio_unitario"] = nuevo_precio
+            nuevo_subtotal = nuevo_precio * nueva_cantidad
+            self._total += nuevo_subtotal
+
+            item["lbl_cantidad"].configure(text=f"{nueva_cantidad:g}")
+            item["lbl_precio"].configure(text=f"${nuevo_subtotal:,.0f}")
+            self._label_total.configure(text=f"${self._total:,.0f}")
+            popup.destroy()
+
+        ctk.CTkButton(popup, text="Aceptar", width=120, command=_confirmar).pack(pady=(4, 16))
+        popup.bind("<Return>", lambda _e: _confirmar())
+
+    def _limpiar_factura(self) -> None:
+        """Elimina todos los productos de la factura y resetea el total."""
+        for widget in self._frame_factura.winfo_children():
+            widget.destroy()
+
+        self._items.clear()
+        self._total = 0.0
+        self._label_total.configure(text="$0")
+        self._entry_direccion.delete(0, "end")
+        self._entry_detalle.delete(0, "end")
+
+        # Restaurar el placeholder
+        self._placeholder_factura = ctk.CTkLabel(
+            self._frame_factura,
+            text="Sin productos aún",
+            text_color="gray",
+            font=ctk.CTkFont(size=13),
+        )
+        self._placeholder_factura.pack(pady=24)
+
+    @staticmethod
+    def _texto_item(item: dict) -> str:
+        """Formatea una línea de la factura: cantidad - nombre - precio_total."""
+        total = item["precio_unitario"] * item["cantidad"]
+        return f"{item['cantidad']} - {item['nombre']} - ${total:,.0f}"
+
+    def imprimir_factura(self) -> None:
+        """Guarda la factura en la BD, la imprime y limpia el formulario."""
+        if not self._items:
+            _c = ThemeManager().color
+            self._label_total.configure(text="Sin ítems", text_color=_c("error_text"))
+            self.after(1500, lambda: self._label_total.configure(text="$0", text_color=ThemeManager().color("success")))
+            return
+
+        usuario = Session().usuario_actual
+        detalle = self._entry_detalle.get().strip() or None
+        direccion = self._entry_direccion.get().strip() or None
+        items_snapshot = dict(self._items)  # captura antes de limpiar
+
+        try:
+            factura = factura_repo.crear(
+                total=self._total, usuario_id=usuario.id, detalle=detalle, direccion=direccion
+            )
+            factura_item_repo.crear_items(factura.id, items_snapshot)
+        except RuntimeError:
+            self._label_total.configure(text="Error al guardar", text_color=ThemeManager().color("error_text"))
+            self.after(
+                2000,
+                lambda: self._label_total.configure(
+                    text=f"${self._total:,.0f}", text_color=ThemeManager().color("success")
+                ),
+            )
+            return
+
+        self._limpiar_factura()
+
+        try:
+            config = configuracion_repo.get_all()
+            impresora.imprimir_recibo(
+                factura=factura,
+                items=items_snapshot,
+                config=config,
+                nombre_cajera=usuario.nombre,
+                detalle=detalle,
+                direccion=direccion,
+            )
+            self._label_total.configure(text="Impresa ✓", text_color=ThemeManager().color("success"))
+            self._preguntar_copia(factura, items_snapshot, config, usuario.nombre, detalle, direccion)
+        except Exception as exc:
+            self._label_total.configure(text="Guardada (sin imprimir)", text_color="#F39C12")
+            self._mostrar_error_impresion(str(exc))
+
+        self.after(2500, lambda: self._label_total.configure(text="$0", text_color=ThemeManager().color("success")))
+
+    def _preguntar_copia(
+        self,
+        factura: object,
+        items: dict,
+        config: dict,
+        nombre_cajera: str,
+        detalle: str | None,
+        direccion: str | None = None,
+    ) -> None:
+        """Muestra un popup preguntando si se desea imprimir una copia."""
+        raiz = self.winfo_toplevel()
+        popup = ctk.CTkToplevel(raiz)
+        popup.title("Imprimir copia")
+        popup.resizable(False, False)
+        popup.transient(raiz)
+
+        ancho, alto = 320, 150
+        raiz.update_idletasks()
+        x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
+        popup.geometry(f"{ancho}x{alto}+{x}+{y}")
+        popup.after(50, popup.grab_set)
+
+        ctk.CTkLabel(
+            popup,
+            text="¿Desea imprimir una copia?",
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(pady=(24, 16), padx=16)
+
+        frame_btns = ctk.CTkFrame(popup, fg_color="transparent")
+        frame_btns.pack()
+
+        def _imprimir_copia() -> None:
+            popup.destroy()
+            try:
+                impresora.imprimir_recibo(
+                    factura=factura,
+                    items=items,
+                    config=config,
+                    nombre_cajera=nombre_cajera,
+                    detalle=detalle,
+                    direccion=direccion,
+                    es_copia=True,
+                )
+            except Exception as exc:
+                self._mostrar_error_impresion(str(exc))
+
+        ctk.CTkButton(
+            frame_btns,
+            text="Sí",
+            width=100,
+            command=_imprimir_copia,
+        ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(
+            frame_btns,
+            text="No",
+            width=100,
+            fg_color="transparent",
+            border_width=1,
+            text_color=ThemeManager().color("transparent_btn_text"),
+            command=popup.destroy,
+        ).pack(side="left")
+
+        popup.bind("<Return>", lambda _e: _imprimir_copia())
+        popup.bind("<Escape>", lambda _e: popup.destroy())
+
+    def _mostrar_error_impresion(self, mensaje: str) -> None:
+        """Muestra un popup con el error de impresión."""
+        raiz = self.winfo_toplevel()
+        popup = ctk.CTkToplevel(raiz)
+        popup.title("Error de impresión")
+        popup.resizable(False, False)
+        popup.transient(raiz)
+
+        ancho, alto = 420, 200
+        raiz.update_idletasks()
+        x = raiz.winfo_x() + (raiz.winfo_width() - ancho) // 2
+        y = raiz.winfo_y() + (raiz.winfo_height() - alto) // 2
+        popup.geometry(f"{ancho}x{alto}+{x}+{y}")
+        popup.after(50, popup.grab_set)
+
+        ctk.CTkLabel(
+            popup,
+            text="La factura fue guardada pero no se pudo imprimir:",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            wraplength=380,
+        ).pack(pady=(18, 6), padx=16)
+
+        ctk.CTkLabel(
+            popup,
+            text=mensaje,
+            font=ctk.CTkFont(size=12),
+            text_color=ThemeManager().color("error_text"),
+            wraplength=380,
+        ).pack(pady=(0, 12), padx=16)
+
+        ctk.CTkButton(popup, text="Cerrar", width=100, command=popup.destroy).pack(pady=(0, 16))
+        popup.bind("<Return>", lambda _e: popup.destroy())
+
+    # ── Resize del catálogo ─────────────────────────────────────────────────────
+
+    def _aumentar_catalogo(self) -> None:
+        if self._card_width >= 400:
+            return
+        self._card_width = min(400, self._card_width + 20)
+        self._card_height = round(self._card_width * 100 / 150)
+        self._num_columnas = 0  # fuerza re-render en _reflow_grid
+        w = self._frame_catalogo._parent_canvas.winfo_width()
+        self._reflow_grid(w if w > 1 else 600)
+
+    def _reducir_catalogo(self) -> None:
+        if self._card_width <= 80:
+            return
+        self._card_width = max(80, self._card_width - 20)
+        self._card_height = round(self._card_width * 100 / 150)
+        self._num_columnas = 0
+        w = self._frame_catalogo._parent_canvas.winfo_width()
+        self._reflow_grid(w if w > 1 else 600)
+
+    # ── Resize de la factura ────────────────────────────────────────────────────
+
+    def _aumentar_factura(self) -> None:
+        if self._item_font_size >= 36:
+            return
+        self._item_font_size = min(36, self._item_font_size + 2)
+        self._item_height = round(50 * self._item_font_size / 14)
+        self._reconstruir_items_factura()
+
+    def _reducir_factura(self) -> None:
+        if self._item_font_size <= 10:
+            return
+        self._item_font_size = max(10, self._item_font_size - 2)
+        self._item_height = round(50 * self._item_font_size / 14)
+        self._reconstruir_items_factura()
+
+    def _reconstruir_items_factura(self) -> None:
+        """Destruye y recrea los ítems de la factura con el tamaño actual."""
+        for widget in self._frame_factura.winfo_children():
+            widget.destroy()
+
+        if not self._items:
+            self._placeholder_factura = ctk.CTkLabel(
+                self._frame_factura,
+                text="Sin productos aún",
+                text_color="gray",
+                font=ctk.CTkFont(size=13),
+            )
+            self._placeholder_factura.pack(pady=24)
+            return
+
+        fs = self._item_font_size
+        ih = self._item_height
+
+        for clave, item in self._items.items():
+            item_frame = ctk.CTkFrame(
+                self._frame_factura,
+                height=ih,
+                border_width=1,
+                border_color=ThemeManager().color("border"),
+                corner_radius=6,
+            )
+            item_frame.pack(fill="x", padx=8, pady=4)
+            item_frame.pack_propagate(False)
+
+            item_frame.grid_columnconfigure(0, weight=0)
+            item_frame.grid_columnconfigure(1, weight=0)
+            item_frame.grid_columnconfigure(2, weight=1)
+            item_frame.grid_columnconfigure(3, weight=0)
+            item_frame.grid_columnconfigure(4, weight=0)  # Botón ×
+
+            lbl_cantidad = ctk.CTkLabel(
+                item_frame,
+                text=f"{item['cantidad']:g}",
+                font=ctk.CTkFont(size=fs, weight="bold"),
+                width=int(40 * fs / 14),
+            )
+            lbl_cantidad.grid(row=0, column=0, padx=(8, 0), pady=4, sticky="w")
+
+            ctk.CTkButton(
+                item_frame,
+                text="+",
+                width=int(24 * fs / 14),
+                height=int(24 * fs / 14),
+                font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
+                fg_color="transparent",
+                border_width=1,
+                text_color=ThemeManager().color("transparent_btn_text"),
+                command=lambda k=clave: self._abrir_popup_cantidad(k),
+            ).grid(row=0, column=1, padx=4, pady=4)
+
+            ctk.CTkLabel(
+                item_frame,
+                text=item["nombre"],
+                font=ctk.CTkFont(size=fs),
+                anchor="w",
+            ).grid(row=0, column=2, padx=4, pady=4, sticky="ew")
+
+            lbl_precio = ctk.CTkLabel(
+                item_frame,
+                text=f"${item['precio_unitario'] * item['cantidad']:,.0f}",
+                font=ctk.CTkFont(size=fs, weight="bold"),
+                width=int(80 * fs / 14),
+                anchor="e",
+            )
+            lbl_precio.grid(row=0, column=3, padx=8, pady=4, sticky="e")
+
+            ctk.CTkButton(
+                item_frame,
+                text="×",
+                width=int(24 * fs / 14),
+                height=int(24 * fs / 14),
+                font=ctk.CTkFont(size=max(10, fs - 2), weight="bold"),
+                fg_color=ThemeManager().color("danger_bg"),
+                hover_color=ThemeManager().color("danger_hover"),
+                command=lambda k=clave: self._eliminar_item(k),
+            ).grid(row=0, column=4, padx=(4, 8), pady=4)
+
+            item["label"] = item_frame
+            item["lbl_cantidad"] = lbl_cantidad
+            item["lbl_precio"] = lbl_precio
+
+    def _volver_a_home(self) -> None:
+        """Regresa a la pantalla principal."""
+        self._navigate("home")
